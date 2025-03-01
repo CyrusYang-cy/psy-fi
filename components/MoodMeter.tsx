@@ -114,11 +114,85 @@ const MoodMeter = ({ user }: MoodMeterProps) => {
     setVisibleQuadrants([quadrant]);
     // Set zoomed state to true
     setIsZoomed(true);
+
+    // Force a chart update after state changes are applied
+    setTimeout(() => {
+      if (chartRef.current) {
+        // Apply zoom directly here as well
+        const chart = chartRef.current;
+        let xMin = -1,
+          xMax = 1,
+          yMin = -1,
+          yMax = 1;
+
+        // Set zoom level based on selected quadrant
+        switch (quadrant) {
+          case "blue": // Left-bottom (negative valence, negative arousal)
+            xMin = -1;
+            xMax = 0;
+            yMin = -1;
+            yMax = 0;
+            break;
+          case "green": // Right-bottom (positive valence, negative arousal)
+            xMin = 0;
+            xMax = 1;
+            yMin = -1;
+            yMax = 0;
+            break;
+          case "red": // Left-top (negative valence, positive arousal)
+            xMin = -1;
+            xMax = 0;
+            yMin = 0;
+            yMax = 1;
+            break;
+          case "yellow": // Right-top (positive valence, positive arousal)
+            xMin = 0;
+            xMax = 1;
+            yMin = 0;
+            yMax = 1;
+            break;
+        }
+
+        // Apply the zoom settings directly
+        chart.options.scales = {
+          x: {
+            ...chart.options.scales?.x,
+            min: xMin,
+            max: xMax,
+          },
+          y: {
+            ...chart.options.scales?.y,
+            min: yMin,
+            max: yMax,
+          },
+        };
+
+        // Force a resize update
+        chart.update("resize");
+
+        // Apply a second update after a small delay
+        setTimeout(() => {
+          if (chartRef.current) {
+            chartRef.current.update("resize");
+          }
+        }, 50);
+      }
+    }, 0);
   };
 
   const handleFeelingSelect = (feeling: Feeling) => {
     setSelectedFeeling(feeling.name);
     setSelectedFeelingData(feeling);
+
+    // Ensure zoom is maintained when selecting a feeling
+    setIsZoomed(true);
+
+    // Force a chart update to maintain zoom
+    setTimeout(() => {
+      if (chartRef.current) {
+        chartRef.current.update("resize");
+      }
+    }, 0);
   };
 
   const handleQuadrantHover = (quadrant: QuadrantType | null) => {
@@ -451,6 +525,20 @@ const MoodMeter = ({ user }: MoodMeterProps) => {
             elements && elements.length > 0 ? "pointer" : "default";
         }
       },
+      // Disable all animations to prevent zoom issues
+      animation: false,
+      animations: {
+        colors: false,
+        x: false,
+        y: false,
+      },
+      transitions: {
+        active: {
+          animation: {
+            duration: 0,
+          },
+        },
+      },
     }),
     []
   );
@@ -494,40 +582,10 @@ const MoodMeter = ({ user }: MoodMeterProps) => {
       }
     } else if (isZoomed && visibleQuadrants.length > 1) {
       // Custom zoom calculations for multiple quadrants
-      const hasRed = visibleQuadrants.includes("red");
-      const hasYellow = visibleQuadrants.includes("yellow");
-      const hasBlue = visibleQuadrants.includes("blue");
-      const hasGreen = visibleQuadrants.includes("green");
-
-      // Determine x-axis bounds
-      if ((hasRed || hasBlue) && !(hasYellow || hasGreen)) {
-        // Only left quadrants
-        xMin = -1;
-        xMax = 0;
-      } else if ((hasYellow || hasGreen) && !(hasRed || hasBlue)) {
-        // Only right quadrants
-        xMin = 0;
-        xMax = 1;
-      } else {
-        // Both left and right
-        xMin = -1;
-        xMax = 1;
-      }
-
-      // Determine y-axis bounds
-      if ((hasRed || hasYellow) && !(hasBlue || hasGreen)) {
-        // Only top quadrants
-        yMin = 0;
-        yMax = 1;
-      } else if ((hasBlue || hasGreen) && !(hasRed || hasYellow)) {
-        // Only bottom quadrants
-        yMin = -1;
-        yMax = 0;
-      } else {
-        // Both top and bottom
-        yMin = -1;
-        yMax = 1;
-      }
+      xMin = -1;
+      xMax = 1;
+      yMin = -1;
+      yMax = 1;
     }
 
     return { xMin, xMax, yMin, yMax };
@@ -541,14 +599,22 @@ const MoodMeter = ({ user }: MoodMeterProps) => {
     const { xMin, xMax, yMin, yMax } = getZoomBounds();
 
     // Apply the zoom settings
-    chart.options.scales!.x!.min = xMin;
-    chart.options.scales!.x!.max = xMax;
-    chart.options.scales!.y!.min = yMin;
-    chart.options.scales!.y!.max = yMax;
+    chart.options.scales = {
+      x: {
+        ...chart.options.scales?.x,
+        min: xMin,
+        max: xMax,
+      },
+      y: {
+        ...chart.options.scales?.y,
+        min: yMin,
+        max: yMax,
+      },
+    };
 
-    // Update the chart with the new settings (use 'none' to prevent animations that might trigger resets)
-    chart.update("none");
-  }, [selectedQuadrant, visibleQuadrants, isZoomed]);
+    // Immediate update
+    chart.update("resize");
+  }, [visibleQuadrants, isZoomed]);
 
   // Quadrant labels for the chart
   const quadrantLabels = useMemo(
