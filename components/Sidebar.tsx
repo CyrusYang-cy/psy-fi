@@ -7,14 +7,35 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import Footer from "./Footer";
 import PlaidLink from "./PlaidLink";
+import SidebarMoodGraph from "./SidebarMoodGraph";
+import { useEffect, useState } from "react";
 
 const Sidebar = ({ user }: SiderbarProps) => {
   const pathname = usePathname();
+  const [moodEntries, setMoodEntries] = useState<any[]>([]);
+
+  useEffect(() => {
+    const fetchMoodEntries = async () => {
+      try {
+        const response = await fetch(`/api/mood?userId=${user.$id}`);
+        if (response.ok) {
+          const data = await response.json();
+          setMoodEntries(data);
+        }
+      } catch (error) {
+        console.error("Error fetching mood entries:", error);
+      }
+    };
+
+    if (user?.$id) {
+      fetchMoodEntries();
+    }
+  }, [user]);
 
   return (
     <section className="sidebar">
       <nav className="flex flex-col gap-4">
-        <Link href="/" className="mb-12 cursor-pointer flex items-center gap-2">
+        <Link href="/" className="mb-6 cursor-pointer flex items-center gap-2">
           <Image
             src="/icons/logo.svg"
             width={34}
@@ -24,6 +45,10 @@ const Sidebar = ({ user }: SiderbarProps) => {
           />
           <h1 className="sidebar-logo">Horizon</h1>
         </Link>
+
+        <div className="mb-6 px-2">
+          <SidebarMoodGraph entries={moodEntries} />
+        </div>
 
         {sidebarLinks.map((item) => {
           const isActive =

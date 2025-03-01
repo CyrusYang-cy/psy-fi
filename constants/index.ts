@@ -1,27 +1,22 @@
 export const sidebarLinks = [
   {
     imgURL: "/icons/mood.svg",
-    route: "/mood-meter",
-    label: "Mood Meter",
-  },
-  {
-    imgURL: "/icons/home.svg",
     route: "/",
-    label: "Home",
+    label: "Home: Mood Meter",
   },
   {
     imgURL: "/icons/dollar-circle.svg",
-    route: "/my-banks",
+    route: "/my-banks", 
     label: "My Banks",
   },
   {
     imgURL: "/icons/transaction.svg",
-    route: "/transaction-history",
+    route: "/transaction-history", // for geting the purchase history
     label: "Transaction History",
   },
   {
     imgURL: "/icons/money-send.svg",
-    route: "/payment-transfer",
+    route: "/payment-transfer", // for the lockdown feature 
     label: "Transfer Funds",
   },
 ];

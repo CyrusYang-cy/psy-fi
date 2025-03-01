@@ -3,6 +3,8 @@ export { default as Footer } from './Footer';
 export { default as PlaidLink } from './PlaidLink';
 export { default as MoodMeter } from './MoodMeter';
 export { default as MoodHistory } from './MoodHistory';
+export { default as MoodGraph } from './MoodGraph';
+export { default as SidebarMoodGraph } from './SidebarMoodGraph';
 export { default as BankCard } from './BankCard';
 export { default as BankInfo } from './BankInfo';
 export { BankDropdown } from './BankDropdown';
