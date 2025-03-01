@@ -5,9 +5,11 @@ import { getAccount, getAccounts } from "@/lib/actions/bank.actions";
 import { getLoggedInUser } from "@/lib/actions/user.actions";
 import { formatAmount } from "@/lib/utils";
 import React from "react";
+import ConnectBankUI from "@/components/ConnectBankUI";
+import ReconnectBankUI from "@/components/ReconnectBankUI";
 
 const TransactionHistory = async ({
-  searchParams: { id, page },
+  searchParams: { id, page, reconnected },
 }: SearchParamProps) => {
   const currentPage = Number(page as string) || 1;
   const loggedIn = await getLoggedInUser();
@@ -16,16 +18,7 @@ const TransactionHistory = async ({
   });
 
   if (!accounts || !accounts.data || accounts.data.length === 0) {
-    return (
-      <div className="transactions">
-        <div className="transactions-header">
-          <HeaderBox
-            title="Transaction History"
-            subtext="No bank accounts found. Please connect a bank account."
-          />
-        </div>
-      </div>
-    );
+    return <ConnectBankUI user={loggedIn} />;
   }
 
   const accountsData = accounts?.data;
@@ -35,6 +28,18 @@ const TransactionHistory = async ({
 
   // Check if account or transactions are undefined
   const transactions = account?.transactions || [];
+
+  // Check for the PRODUCT_NOT_READY status
+  const transactionsNotReady =
+    account?.transactionsStatus === "PRODUCT_NOT_READY";
+
+  // Only need to reconnect if transactions are empty AND not in the "not ready" state
+  const needsReconnect = transactions.length === 0 && !transactionsNotReady;
+
+  if (needsReconnect) {
+    return <ReconnectBankUI user={loggedIn} />;
+  }
+
   const rowsPerPage = 10;
   const totalPages = Math.ceil(transactions.length / rowsPerPage);
 
@@ -46,6 +51,8 @@ const TransactionHistory = async ({
     indexOfLastTransaction
   );
 
+  const showReconnectionSuccess = reconnected === "true";
+
   return (
     <div className="transactions">
       <div className="transactions-header">
@@ -53,6 +60,13 @@ const TransactionHistory = async ({
           title="Transaction History"
           subtext="See your bank details and transactions."
         />
+
+        {showReconnectionSuccess && (
+          <div className="mt-4 p-4 bg-[#D1FAE5] rounded-md text-[#047857] font-medium">
+            Bank successfully reconnected! Your transaction history is now
+            available.
+          </div>
+        )}
       </div>
 
       <div className="space-y-6">
@@ -77,14 +91,32 @@ const TransactionHistory = async ({
           </div>
         </div>
 
-        <section className="flex w-full flex-col gap-6">
-          <TransactionsTable transactions={currentTransactions} />
-          {totalPages > 1 && (
-            <div className="my-4 w-full">
-              <Pagination totalPages={totalPages} page={currentPage} />
-            </div>
-          )}
-        </section>
+        {transactionsNotReady ? (
+          <div className="my-6 p-6 bg-blue-50 rounded-md text-center">
+            <h3 className="text-xl font-medium text-blue-600 mb-2">
+              Preparing Your Transaction History
+            </h3>
+            <p className="text-blue-700">{account.transactionsMessage}</p>
+            <p className="mt-4 text-sm text-blue-600">
+              This usually takes just a few moments. Try refreshing the page.
+            </p>
+            <a
+              href={`/transaction-history?id=${appwriteItemId}`}
+              className="mt-4 px-4 py-2 inline-block bg-blue-600 text-white rounded-md hover:bg-blue-700 transition"
+            >
+              Refresh Now
+            </a>
+          </div>
+        ) : (
+          <section className="flex w-full flex-col gap-6">
+            <TransactionsTable transactions={currentTransactions} />
+            {totalPages > 1 && (
+              <div className="my-4 w-full">
+                <Pagination totalPages={totalPages} page={currentPage} />
+              </div>
+            )}
+          </section>
+        )}
       </div>
     </div>
   );

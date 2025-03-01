@@ -131,23 +131,50 @@ export const logoutAccount = async () => {
   }
 }
 
-export const createLinkToken = async (user: User) => {
+export const createLinkToken = async (user: User, isReconnect = false) => {
   try {
-    const tokenParams = {
+    // Basic token params that are required for all flows
+    const tokenParams: any = {
       user: {
         client_user_id: user.$id
       },
       client_name: `${user.firstName} ${user.lastName}`,
-      products: ['auth'] as Products[],
+      products: ['auth', 'transactions'] as Products[],
       language: 'en',
       country_codes: ['US'] as CountryCode[],
+    };
+
+    // For reconnection, we need to get the existing bank's item ID
+    if (isReconnect) {
+      // Get existing banks for this user
+      const existingBanks = await getBanks({ userId: user.$id });
+      
+      if (existingBanks && existingBanks.length > 0) {
+        // Use the first bank account's item ID for reconnection
+        // In a more complex app, you might want the user to select which bank to reconnect
+        tokenParams.access_token = existingBanks[0].accessToken;
+      }
     }
 
-    const response = await plaidClient.linkTokenCreate(tokenParams);
+    console.log("Creating link token with params:", {
+      ...tokenParams,
+      access_token: tokenParams.access_token ? "HIDDEN" : undefined
+    });
 
-    return parseStringify({ linkToken: response.data.link_token })
-  } catch (error) {
-    console.log(error);
+    const response = await plaidClient.linkTokenCreate(tokenParams);
+    console.log("Link token created successfully");
+
+    return parseStringify({ linkToken: response.data.link_token });
+  } catch (error: any) {
+    console.error("Error creating link token:", error);
+    // Log detailed error information if available
+    if (error.response && error.response.data) {
+      console.error("Plaid API Error Details:", {
+        status: error.response.status,
+        data: error.response.data
+      });
+    }
+    return null;
   }
 }
 
@@ -185,8 +212,11 @@ export const createBankAccount = async ({
 export const exchangePublicToken = async ({
   publicToken,
   user,
-}: exchangePublicTokenProps) => {
+  isReconnect = false
+}: exchangePublicTokenProps & { isReconnect?: boolean }) => {
   try {
+    console.log(`Starting public token exchange${isReconnect ? ' (RECONNECT)' : ''}`);
+    
     // Exchange public token for access token and item ID
     const response = await plaidClient.itemPublicTokenExchange({
       public_token: publicToken,
@@ -195,13 +225,50 @@ export const exchangePublicToken = async ({
     const accessToken = response.data.access_token;
     const itemId = response.data.item_id;
     
+    console.log(`Successfully exchanged public token for access token (item ID: ${itemId})`);
+    
     // Get account information from Plaid using the access token
     const accountsResponse = await plaidClient.accountsGet({
       access_token: accessToken,
     });
 
     const accountData = accountsResponse.data.accounts[0];
+    console.log(`Retrieved account information for account: ${accountData.account_id}`);
 
+    // Check if this bank account already exists by checking for a match on itemId
+    const existingBanks = await getBanks({ userId: user.$id });
+    const existingBank = existingBanks.find((bank: Bank) => bank.bankId === itemId);
+    
+    if (existingBank) {
+      // This is a reconnection - just update the access token
+      console.log(`Found existing bank connection (ID: ${existingBank.$id}). Updating access token...`);
+      
+      const { database } = await createAdminClient();
+      
+      await database.updateDocument(
+        DATABASE_ID!,
+        BANK_COLLECTION_ID!,
+        existingBank.$id,
+        {
+          accessToken: accessToken,
+        }
+      );
+      
+      console.log("Access token updated successfully. Revalidating paths...");
+      
+      // Revalidate the path to reflect the changes
+      revalidatePath("/");
+      revalidatePath("/transaction-history");
+      
+      return parseStringify({
+        publicTokenExchange: "complete",
+        reconnected: true
+      });
+    }
+    
+    // This is a new connection - continue with normal flow
+    console.log("Creating new bank connection...");
+    
     // Create a processor token for Dwolla using the access token and account ID
     const request: ProcessorTokenCreateRequest = {
       access_token: accessToken,
@@ -211,16 +278,22 @@ export const exchangePublicToken = async ({
 
     const processorTokenResponse = await plaidClient.processorTokenCreate(request);
     const processorToken = processorTokenResponse.data.processor_token;
+    console.log("Created processor token for Dwolla");
 
-     // Create a funding source URL for the account using the Dwolla customer ID, processor token, and bank name
-     const fundingSourceUrl = await addFundingSource({
-      dwollaCustomerId: user.dwollaCustomerId,
+    // Create a funding source URL for the account using the Dwolla customer ID, processor token, and bank name
+    const fundingSourceUrl = await addFundingSource({
+      dwollaCustomerId: user.dwollaCustomerId!,
       processorToken,
       bankName: accountData.name,
     });
     
     // If the funding source URL is not created, throw an error
-    if (!fundingSourceUrl) throw Error;
+    if (!fundingSourceUrl) {
+      console.error("Failed to create funding source URL");
+      throw new Error("Failed to create funding source URL");
+    }
+    
+    console.log("Created funding source URL for Dwolla. Creating bank account in database...");
 
     // Create a bank account using the user ID, item ID, account ID, access token, funding source URL, and shareableId ID
     await createBankAccount({
@@ -232,15 +305,30 @@ export const exchangePublicToken = async ({
       shareableId: encryptId(accountData.account_id),
     });
 
+    console.log("Bank account created successfully. Revalidating paths...");
+    
     // Revalidate the path to reflect the changes
     revalidatePath("/");
+    revalidatePath("/transaction-history");
 
     // Return a success message
     return parseStringify({
       publicTokenExchange: "complete",
+      reconnected: false
     });
-  } catch (error) {
-    console.error("An error occurred while creating exchanging token:", error);
+  } catch (error: any) {
+    console.error("An error occurred while exchanging token:", error);
+    
+    // Log detailed error information if available
+    if (error.response && error.response.data) {
+      console.error("API Error Details:", {
+        status: error.response.status,
+        data: error.response.data
+      });
+    }
+    
+    // Re-throw to ensure the error propagates to the UI
+    throw error;
   }
 }
 

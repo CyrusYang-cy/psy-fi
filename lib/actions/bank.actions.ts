@@ -101,6 +101,27 @@ export const getAccount = async ({ appwriteItemId }: getAccountProps) => {
       accessToken: bank?.accessToken,
     });
 
+    // Check if we received the special PRODUCT_NOT_READY status
+    if (transactions && transactions.status === "PRODUCT_NOT_READY") {
+      return parseStringify({
+        data: {
+          id: accountData.account_id,
+          availableBalance: accountData.balances.available!,
+          currentBalance: accountData.balances.current!,
+          institutionId: institution.institution_id,
+          name: accountData.name,
+          officialName: accountData.official_name,
+          mask: accountData.mask!,
+          type: accountData.type as string,
+          subtype: accountData.subtype! as string,
+          appwriteItemId: bank.$id,
+        },
+        transactions: [],
+        transactionsStatus: "PRODUCT_NOT_READY",
+        transactionsMessage: transactions.message
+      });
+    }
+
     const account = {
       id: accountData.account_id,
       availableBalance: accountData.balances.available!,
@@ -115,7 +136,7 @@ export const getAccount = async ({ appwriteItemId }: getAccountProps) => {
     };
 
     // sort transactions by date such that the most recent transaction is first
-      const allTransactions = [...transactions, ...transferTransactions].sort(
+    const allTransactions = [...transactions, ...transferTransactions].sort(
       (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
     );
 
@@ -150,36 +171,79 @@ export const getInstitution = async ({
 export const getTransactions = async ({
   accessToken,
 }: getTransactionsProps) => {
-  let hasMore = true;
   let transactions: any = [];
 
+  // Helper functions to format dates for Plaid API
+  const getTodayDate = () => {
+    const today = new Date();
+    return today.toISOString().split('T')[0]; // Format as YYYY-MM-DD
+  };
+
+  const getDateNDaysAgo = (days: number) => {
+    const date = new Date();
+    date.setDate(date.getDate() - days);
+    return date.toISOString().split('T')[0]; // Format as YYYY-MM-DD
+  };
+
   try {
-    // Iterate through each page of new transaction updates for item
-    while (hasMore) {
-      const response = await plaidClient.transactionsSync({
-        access_token: accessToken,
-      });
-
-      const data = response.data;
-
-      transactions = response.data.added.map((transaction) => ({
-        id: transaction.transaction_id,
-        name: transaction.name,
-        paymentChannel: transaction.payment_channel,
-        type: transaction.payment_channel,
-        accountId: transaction.account_id,
-        amount: transaction.amount,
-        pending: transaction.pending,
-        category: transaction.category ? transaction.category[0] : "",
-        date: transaction.date,
-        image: transaction.logo_url,
-      }));
-
-      hasMore = data.has_more;
-    }
+    // Instead of using transactionsSync, use the transactionsGet endpoint
+    // This matches your successful Postman request
+    const request = {
+      access_token: accessToken,
+      start_date: getDateNDaysAgo(365), // Get transactions from up to a year ago
+      end_date: getTodayDate(),        // Up to today
+      options: {
+        count: 100,
+        offset: 0,
+      }
+    };
+    
+    console.log("Fetching transactions with request:", {
+      access_token: "HIDDEN", // Don't log the access token
+      start_date: request.start_date,
+      end_date: request.end_date
+    });
+    
+    const response = await plaidClient.transactionsGet(request);
+    const data = response.data;
+    
+    // Map transactions to our format
+    transactions = data.transactions.map((transaction) => ({
+      id: transaction.transaction_id,
+      name: transaction.name,
+      paymentChannel: transaction.payment_channel,
+      type: transaction.payment_channel,
+      accountId: transaction.account_id,
+      amount: transaction.amount,
+      pending: transaction.pending,
+      category: transaction.category ? transaction.category[0] : "",
+      date: transaction.date,
+      image: transaction.logo_url,
+    }));
 
     return parseStringify(transactions);
-  } catch (error) {
-    console.error("An error occurred while getting the accounts:", error);
+  } catch (error: any) {
+    console.error("Error fetching transactions from Plaid:", error);
+    
+    // Log detailed error information if available
+    if (error.response && error.response.data) {
+      console.error("Plaid API Error Details:", {
+        status: error.response.status,
+        data: error.response.data
+      });
+      
+      // Check for the specific PRODUCT_NOT_READY error
+      if (error.response.data.error_code === "PRODUCT_NOT_READY") {
+        console.log("Transaction data is not ready yet. This is expected for newly linked accounts.");
+        // Return a special object to indicate transactions are not ready yet
+        return parseStringify({ 
+          status: "PRODUCT_NOT_READY", 
+          message: "Your transaction data is being prepared. Please check back in a few moments." 
+        });
+      }
+    }
+    
+    // Return empty array instead of undefined to prevent UI errors
+    return parseStringify([]);
   }
 };
