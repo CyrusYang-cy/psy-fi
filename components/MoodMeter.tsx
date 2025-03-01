@@ -87,6 +87,12 @@ const MoodMeter = ({ user }: MoodMeterProps) => {
   const chartRef = useRef<ChartJS<"scatter">>(null);
   // Add ref to track current hovered feeling to prevent unnecessary updates
   const currentHoveredFeelingRef = useRef<string | null>(null);
+  // Add state for search term
+  const [searchTerm, setSearchTerm] = useState("");
+  // Add state to track feeling selected from search
+  const [searchSelectedFeeling, setSearchSelectedFeeling] = useState<
+    string | null
+  >(null);
   // Add state for visible quadrants
   const [visibleQuadrants, setVisibleQuadrants] = useState<QuadrantType[]>([
     "red",
@@ -304,12 +310,50 @@ const MoodMeter = ({ user }: MoodMeterProps) => {
         y: f.arousal,
         feeling: f,
       })),
-      backgroundColor: getQuadrantColors(quadrant).rgb,
-      borderColor: getQuadrantColors(quadrant).fill,
-      borderWidth: 1,
-      pointRadius: selectedFeeling
-        ? (point: any) => (point.raw.feeling.name === selectedFeeling ? 12 : 8)
-        : 8,
+      backgroundColor: (context: any) => {
+        // Check if this point is the one selected from search
+        if (
+          context.raw &&
+          context.raw.feeling &&
+          searchSelectedFeeling === context.raw.feeling.name
+        ) {
+          // Create a pulsing effect for the search-selected feeling
+          return getQuadrantColors(quadrant)
+            .rgb.replace(")", ", 0.9)")
+            .replace("rgba", "rgba");
+        }
+        return getQuadrantColors(quadrant).rgb;
+      },
+      borderColor: (context: any) => {
+        // Add a highlighted border for the search-selected feeling
+        if (
+          context.raw &&
+          context.raw.feeling &&
+          searchSelectedFeeling === context.raw.feeling.name
+        ) {
+          return "#ffffff";
+        }
+        return getQuadrantColors(quadrant).fill;
+      },
+      borderWidth: (context: any) => {
+        // Make the border thicker for the search-selected feeling
+        if (
+          context.raw &&
+          context.raw.feeling &&
+          searchSelectedFeeling === context.raw.feeling.name
+        ) {
+          return 2;
+        }
+        return 1;
+      },
+      pointRadius: (point: any) => {
+        const feelingName = point.raw.feeling.name;
+        // Highlight the point if it's selected, search-selected, or if it matches the hovered feeling
+        if (selectedFeeling === feelingName) return 12;
+        if (searchSelectedFeeling === feelingName) return 14; // Make search-selected feelings even larger
+        if (hoveredFeeling && hoveredFeeling.name === feelingName) return 12;
+        return 8;
+      },
       pointHoverRadius: 12,
       hidden: !visibleQuadrants.includes(quadrant),
     });
@@ -323,7 +367,14 @@ const MoodMeter = ({ user }: MoodMeterProps) => {
         createDataset("yellow", feelingsByQuadrant.yellow),
       ],
     };
-  }, [allFeelings, selectedFeeling, visibleQuadrants, getQuadrantColors]);
+  }, [
+    allFeelings,
+    selectedFeeling,
+    visibleQuadrants,
+    getQuadrantColors,
+    hoveredFeeling,
+    searchSelectedFeeling,
+  ]);
 
   // Feeling information display - prioritize selected feeling over hovered feeling
   const displayFeeling = useMemo(() => {
@@ -645,6 +696,85 @@ const MoodMeter = ({ user }: MoodMeterProps) => {
     };
   }, [quadrantLabels, isZoomed]);
 
+  // Get filtered feelings based on search term and visible quadrants
+  const filteredFeelings = useMemo(() => {
+    if (!searchTerm.trim()) return [];
+
+    return allFeelings.filter(
+      (feeling) =>
+        feeling.name.toLowerCase().includes(searchTerm.toLowerCase()) &&
+        visibleQuadrants.includes(feeling.quadrant as QuadrantType)
+    );
+  }, [allFeelings, searchTerm, visibleQuadrants]);
+
+  // Handle search input change
+  const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setSearchTerm(e.target.value);
+  };
+
+  // Handle feeling selection from search results
+  const handleSearchSelect = (feeling: Feeling) => {
+    // Set the search-selected feeling
+    setSearchSelectedFeeling(feeling.name);
+
+    // Find the feeling's position in the chart
+    const findFeelingInChart = () => {
+      if (!chartRef.current) return;
+
+      const chart = chartRef.current;
+      const datasets = chart.data.datasets;
+
+      // Loop through datasets to find the feeling
+      for (let i = 0; i < datasets.length; i++) {
+        const data = datasets[i].data;
+        for (let j = 0; j < data.length; j++) {
+          const point = data[j] as any;
+          if (point.feeling && point.feeling.name === feeling.name) {
+            // Found the feeling - update the chart
+            chart.update();
+
+            // Scroll the chart to center on this point
+            const meta = chart.getDatasetMeta(i);
+            if (meta.data[j]) {
+              const x = meta.data[j].x;
+              const y = meta.data[j].y;
+
+              // Ensure the quadrant containing this feeling is visible
+              if (
+                !visibleQuadrants.includes(feeling.quadrant as QuadrantType)
+              ) {
+                setVisibleQuadrants((prev) => [
+                  ...prev,
+                  feeling.quadrant as QuadrantType,
+                ]);
+              }
+
+              // Force chart update to ensure the point is visible
+              setTimeout(() => {
+                chart.update();
+              }, 10);
+            }
+            break;
+          }
+        }
+      }
+    };
+
+    // Trigger hover effect on the corresponding bubble
+    handleFeelingHover(feeling);
+
+    // Find and highlight the feeling in the chart
+    findFeelingInChart();
+
+    // Clear search after selection
+    setSearchTerm("");
+
+    // Clear the search-selected feeling highlight after a delay
+    setTimeout(() => {
+      setSearchSelectedFeeling(null);
+    }, 2000);
+  };
+
   const handleSubmit = async () => {
     if (!selectedQuadrant || !selectedFeeling) return;
 
@@ -896,6 +1026,74 @@ const MoodMeter = ({ user }: MoodMeterProps) => {
                     data={prepareChartData}
                     options={chartOptions}
                   />
+                </div>
+
+                {/* Search bar for feelings */}
+                <div className="w-full mb-6">
+                  <div className="relative">
+                    <input
+                      type="text"
+                      value={searchTerm}
+                      onChange={handleSearchChange}
+                      placeholder="Search for feelings..."
+                      className="w-full p-3 pl-10 bg-gray-800/70 border border-gray-700 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-200"
+                    />
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      className="h-5 w-5 absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+                      />
+                    </svg>
+
+                    {/* Search results dropdown */}
+                    {searchTerm.trim() !== "" &&
+                      filteredFeelings.length > 0 && (
+                        <div className="absolute z-10 w-full mt-1 bg-gray-800 border border-gray-700 rounded-lg shadow-lg max-h-60 overflow-y-auto">
+                          {filteredFeelings.map((feeling) => {
+                            const colors = getQuadrantColors(
+                              feeling.quadrant as QuadrantType
+                            );
+                            return (
+                              <div
+                                key={feeling.name}
+                                className={`p-3 cursor-pointer hover:bg-gray-700 flex items-center gap-2 border-b border-gray-700 last:border-b-0`}
+                                onClick={() => handleSearchSelect(feeling)}
+                              >
+                                <div
+                                  className="w-3 h-3 rounded-full"
+                                  style={{ backgroundColor: colors.fill }}
+                                />
+                                <span className={`${colors.text} font-medium`}>
+                                  {feeling.name}
+                                </span>
+                                <span className="text-gray-400 text-sm ml-auto">
+                                  {
+                                    MOOD_QUADRANTS[
+                                      feeling.quadrant as QuadrantType
+                                    ].name
+                                  }
+                                </span>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+
+                    {searchTerm.trim() !== "" &&
+                      filteredFeelings.length === 0 && (
+                        <div className="absolute z-10 w-full mt-1 bg-gray-800 border border-gray-700 rounded-lg shadow-lg p-3 text-gray-400">
+                          No feelings found matching "{searchTerm}"
+                        </div>
+                      )}
+                  </div>
                 </div>
 
                 {/* Feeling information box - shown on hover or selection */}

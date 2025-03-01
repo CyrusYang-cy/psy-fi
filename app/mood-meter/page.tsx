@@ -25,11 +25,6 @@ export default async function MoodMeterPage() {
   return (
     <main className="flex-center flex-col paddings">
       <section className="w-full max-w-5xl">
-        <div className="flex-between mb-8">
-          <h1 className="head-text">Mood Meter</h1>
-          <p className="text-lg">How are you feeling right now?</p>
-        </div>
-
         <div className="mt-8">
           <MoodMeter user={user} />
         </div>

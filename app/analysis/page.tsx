@@ -5,7 +5,7 @@ import { getMoodEntries } from "@/lib/actions/mood.actions";
 import { redirect } from "next/navigation";
 
 export const metadata: Metadata = {
-  title: "Mood Analysis | Horizon",
+  title: "Mood Analysis | Psy-Fi",
   description:
     "Analyze your mood patterns over time with Horizon's Mood Analysis",
 };
