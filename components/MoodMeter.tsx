@@ -1041,17 +1041,6 @@ const MoodMeter = ({ user }: MoodMeterProps) => {
                     }
                   )}
                 </div>
-
-                {/* Chart.js Feeling Plot - Only show when a quadrant is selected */}
-                <div className="w-full h-[500px] bg-gray-800/50 rounded-xl mb-8 overflow-hidden border border-gray-700 backdrop-blur-sm p-4">
-                  <Scatter
-                    id="mood-chart"
-                    ref={chartRef}
-                    data={prepareChartData}
-                    options={chartOptions}
-                  />
-                </div>
-
                 {/* Search bar for feelings */}
                 <div className="w-full mb-6">
                   <div className="relative">
@@ -1118,6 +1107,16 @@ const MoodMeter = ({ user }: MoodMeterProps) => {
                       </div>
                     )}
                   </div>
+                </div>
+
+                {/* Chart.js Feeling Plot - Only show when a quadrant is selected */}
+                <div className="w-full h-[500px] bg-gray-800/50 rounded-xl mb-8 overflow-hidden border border-gray-700 backdrop-blur-sm p-4">
+                  <Scatter
+                    id="mood-chart"
+                    ref={chartRef}
+                    data={prepareChartData}
+                    options={chartOptions}
+                  />
                 </div>
 
                 {/* Feeling information box - shown on hover or selection */}

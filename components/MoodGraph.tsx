@@ -19,7 +19,11 @@ import {
   endOfMonth,
   eachDayOfInterval,
   isWithinInterval,
+  startOfWeek,
+  endOfWeek,
 } from "date-fns";
+import { DayPicker } from "react-day-picker";
+import "react-day-picker/dist/style.css";
 
 type MoodGraphProps = {
   entries: any[];
@@ -45,38 +49,66 @@ const MoodGraph = ({ entries }: MoodGraphProps) => {
     y: number;
   } | null>(null);
   const [timeScale, setTimeScale] = useState<TimeScale>("1W");
+  const [showCalendar, setShowCalendar] = useState(false);
+  const [selectedDate, setSelectedDate] = useState<Date>(new Date());
   const graphRef = useRef<HTMLDivElement>(null);
+  const calendarRef = useRef<HTMLDivElement>(null);
+
+  // Close calendar when clicking outside
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (
+        calendarRef.current &&
+        !calendarRef.current.contains(event.target as Node)
+      ) {
+        setShowCalendar(false);
+      }
+    }
+
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, []);
 
   // Sort entries by date
   const sortedEntries = [...entries].sort(
     (a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
   );
 
-  // Filter entries based on selected time scale
+  // Filter entries based on selected time scale and date
   const getFilteredEntries = () => {
-    const now = new Date();
     let startDate: Date;
     let endDate: Date;
 
     switch (timeScale) {
       case "1D":
-        // For 1D, show from 5 AM today to midnight of the next day
-        startDate = setMinutes(setHours(startOfDay(now), 5), 0);
-        endDate = endOfDay(now);
+        // For 1D, show from 5 AM to midnight of the selected day
+        startDate = setMinutes(setHours(startOfDay(selectedDate), 5), 0);
+        endDate = endOfDay(selectedDate);
         break;
       case "1W":
-        // For 1W, show the last 7 days
-        startDate = startOfDay(subDays(now, 6)); // 6 days ago + today = 7 days
-        endDate = endOfDay(now);
+        // For 1W, show 7 days ending on the selected date
+        if (isSameDay(selectedDate, new Date())) {
+          // If today is selected, show last 7 days
+          startDate = startOfDay(subDays(selectedDate, 6));
+        } else {
+          // Otherwise, center the week on the selected date (3 days before, 3 days after)
+          startDate = startOfWeek(selectedDate);
+          endDate = endOfWeek(selectedDate);
+          // If the selected date is part of the week but not centered,
+          // we'll leave it as is to show the entire week
+        }
+        endDate = endOfDay(selectedDate);
         break;
       case "1M":
-        // For 1M, show the current month
-        startDate = startOfMonth(now);
-        endDate = endOfMonth(now);
+        // For 1M, show 30 days ending on the selected date
+        startDate = startOfDay(subDays(selectedDate, 29));
+        endDate = endOfDay(selectedDate);
         break;
       default:
-        startDate = startOfDay(subWeeks(now, 1));
-        endDate = endOfDay(now);
+        startDate = startOfDay(subDays(selectedDate, 6));
+        endDate = endOfDay(selectedDate);
     }
 
     return sortedEntries.filter((entry) => {
@@ -100,20 +132,18 @@ const MoodGraph = ({ entries }: MoodGraphProps) => {
 
     // For 1W and 1M, aggregate data by day
     const entriesByDay: Record<string, any[]> = {};
-    const now = new Date();
     let dateRange: Date[] = [];
 
     if (timeScale === "1W") {
-      // Create array of the last 7 days
+      // Create array of days in the week
       for (let i = 6; i >= 0; i--) {
-        dateRange.push(subDays(now, i));
+        dateRange.push(subDays(selectedDate, i));
       }
     } else if (timeScale === "1M") {
-      // Create array of all days in the current month
-      dateRange = eachDayOfInterval({
-        start: startOfMonth(now),
-        end: endOfMonth(now),
-      });
+      // Create array of last 30 days
+      for (let i = 29; i >= 0; i--) {
+        dateRange.push(subDays(selectedDate, i));
+      }
     }
 
     // Initialize empty arrays for each day
@@ -204,11 +234,11 @@ const MoodGraph = ({ entries }: MoodGraphProps) => {
     };
   };
 
-  // Map valence/arousal values (-1 to 1) to y-axis positions (0-100)
+  // Map valence/arousal values (-1 to 1) to y-axis positions (10-90)
   const getYPosition = (value: number | null) => {
     if (value === null) return 50; // Center for placeholder entries
-    // Convert from [-1, 1] to [0, 100]
-    return 50 - value * 40;
+    // Convert from [-1, 1] to [10, 90] with padding to prevent dots from touching edges
+    return 50 - value * 35; // Reduced from 40 to 35 to add margin
   };
 
   // Get X position based on time scale
@@ -216,23 +246,29 @@ const MoodGraph = ({ entries }: MoodGraphProps) => {
     if (timeScale === "1D") {
       // For 1D, position based on time of day
       const entryDate = new Date(entry.timestamp);
-      const startOfToday = setMinutes(setHours(startOfDay(new Date()), 5), 0); // 5 AM
-      const endOfToday = endOfDay(new Date()); // Midnight
+      const dayStart = setMinutes(setHours(startOfDay(selectedDate), 5), 0); // 5 AM
+      const dayEnd = endOfDay(selectedDate); // Midnight
       const totalMinutes =
-        (endOfToday.getTime() - startOfToday.getTime()) / (1000 * 60);
+        (dayEnd.getTime() - dayStart.getTime()) / (1000 * 60);
       const entryMinutes =
-        (entryDate.getTime() - startOfToday.getTime()) / (1000 * 60);
+        (entryDate.getTime() - dayStart.getTime()) / (1000 * 60);
 
-      // If entry is before 5 AM, position at start
-      if (entryMinutes < 0) return 0;
+      // Add padding to left and right (5% on each side)
+      const paddedPosition = 5 + (entryMinutes / totalMinutes) * 90;
 
-      // If entry is after midnight, position at end
-      if (entryMinutes > totalMinutes) return 100;
+      // If entry is before 5 AM, position at leftmost with padding
+      if (entryMinutes < 0) return 5;
 
-      return (entryMinutes / totalMinutes) * 100;
+      // If entry is after midnight, position at rightmost with padding
+      if (entryMinutes > totalMinutes) return 95;
+
+      return paddedPosition;
     } else {
-      // For 1W and 1M, evenly space entries
-      return (index / (entries.length - 1 || 1)) * 100;
+      // For 1W and 1M, evenly space entries with padding
+      if (entries.length <= 1) return 50; // Center if only one entry
+
+      // Add padding to left and right (5% on each side)
+      return 5 + (index / (entries.length - 1)) * 90;
     }
   };
 
@@ -281,8 +317,8 @@ const MoodGraph = ({ entries }: MoodGraphProps) => {
     }
 
     if (timeScale === "1D") {
-      // For 1D, show hours
-      const today = new Date();
+      // For 1D, show hours with padding
+      const today = selectedDate;
       return [
         format(setHours(today, 5), "h a"), // 5 AM
         format(setHours(today, 9), "h a"), // 9 AM
@@ -303,6 +339,38 @@ const MoodGraph = ({ entries }: MoodGraphProps) => {
     }
   };
 
+  // Handle day selection from calendar
+  const handleDaySelect = (day: Date | undefined) => {
+    if (day) {
+      setSelectedDate(day);
+      setShowCalendar(false);
+    }
+  };
+
+  // Get date range display for the header
+  const getDateRangeDisplay = () => {
+    if (timeScale === "1D") {
+      return format(selectedDate, "MMMM d, yyyy");
+    } else if (timeScale === "1W") {
+      const startDate = subDays(selectedDate, 6);
+      return `${format(startDate, "MMM d")} - ${format(
+        selectedDate,
+        "MMM d, yyyy"
+      )}`;
+    } else {
+      const startDate = subDays(selectedDate, 29);
+      return `${format(startDate, "MMM d")} - ${format(
+        selectedDate,
+        "MMM d, yyyy"
+      )}`;
+    }
+  };
+
+  // Reset to today
+  const handleResetToToday = () => {
+    setSelectedDate(new Date());
+  };
+
   if (!entries || entries.length === 0) {
     return (
       <div className="text-center p-4 bg-gray-800 rounded-xl">
@@ -314,23 +382,80 @@ const MoodGraph = ({ entries }: MoodGraphProps) => {
   return (
     <div className="p-4 bg-gray-800 rounded-xl">
       <div className="flex justify-between items-center mb-4">
-        <h3 className="text-lg font-semibold text-white">Mood Trends</h3>
+        <div className="flex items-center">
+          <h3 className="text-lg font-semibold text-white">Mood Trends</h3>
+          <span className="ml-2 text-xs text-gray-400">
+            {getDateRangeDisplay()}
+          </span>
+        </div>
 
-        {/* Time scale selector */}
-        <div className="flex bg-gray-700 rounded-lg p-0.5">
-          {(["1D", "1W", "1M"] as TimeScale[]).map((scale) => (
+        {/* Time scale and calendar selector */}
+        <div className="flex items-center space-x-2">
+          <div className="flex bg-gray-700 rounded-lg p-0.5">
+            {(["1D", "1W", "1M"] as TimeScale[]).map((scale) => (
+              <button
+                key={scale}
+                className={`px-3 py-1 text-xs rounded-md transition ${
+                  timeScale === scale
+                    ? "bg-blue-500 text-white"
+                    : "text-gray-300 hover:bg-gray-600"
+                }`}
+                onClick={() => setTimeScale(scale)}
+              >
+                {scale}
+              </button>
+            ))}
+          </div>
+
+          <div className="relative" ref={calendarRef}>
             <button
-              key={scale}
-              className={`px-3 py-1 text-xs rounded-md transition ${
-                timeScale === scale
-                  ? "bg-blue-500 text-white"
-                  : "text-gray-300 hover:bg-gray-600"
-              }`}
-              onClick={() => setTimeScale(scale)}
+              className="p-1.5 bg-gray-700 rounded-lg text-gray-300 hover:bg-gray-600 transition"
+              onClick={() => setShowCalendar(!showCalendar)}
             >
-              {scale}
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+                <line x1="16" y1="2" x2="16" y2="6"></line>
+                <line x1="8" y1="2" x2="8" y2="6"></line>
+                <line x1="3" y1="10" x2="21" y2="10"></line>
+              </svg>
             </button>
-          ))}
+
+            {showCalendar && (
+              <div className="absolute right-0 z-50 mt-1 bg-gray-800 rounded-lg shadow-xl border border-gray-700 p-2">
+                <div className="text-white text-right mb-1">
+                  <button
+                    onClick={handleResetToToday}
+                    className="text-xs text-blue-400 hover:text-blue-300"
+                  >
+                    Today
+                  </button>
+                </div>
+                <DayPicker
+                  mode="single"
+                  selected={selectedDate}
+                  onSelect={handleDaySelect}
+                  modifiersClassNames={{
+                    selected: "bg-blue-500 text-white rounded",
+                  }}
+                  styles={{
+                    caption: { color: "white" },
+                    table: { fontSize: "0.875rem" },
+                    day: { color: "#e5e7eb" },
+                  }}
+                />
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
@@ -359,7 +484,7 @@ const MoodGraph = ({ entries }: MoodGraphProps) => {
         {/* X-axis grid lines for 1D view */}
         {timeScale === "1D" && (
           <div className="absolute top-0 left-0 w-full h-full">
-            {[0, 20, 40, 60, 80, 100].map((position) => (
+            {[5, 21.5, 38, 54.5, 71, 87.5].map((position) => (
               <div
                 key={`x-grid-${position}`}
                 className="absolute h-full w-px bg-gray-700/50"
