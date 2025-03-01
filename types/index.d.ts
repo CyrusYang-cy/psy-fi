@@ -60,6 +60,8 @@ declare type Transaction = {
   pending: boolean;
   category: string;
   date: string;
+  authorizedDate?: string;
+  timestamp?: string;
   image: string;
   type: string;
   $createdAt: string;

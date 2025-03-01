@@ -173,25 +173,17 @@ export const getTransactions = async ({
 }: getTransactionsProps) => {
   let transactions: any = [];
 
-  // Helper functions to format dates for Plaid API
-  const getTodayDate = () => {
-    const today = new Date();
-    return today.toISOString().split('T')[0]; // Format as YYYY-MM-DD
-  };
-
-  const getDateNDaysAgo = (days: number) => {
-    const date = new Date();
-    date.setDate(date.getDate() - days);
-    return date.toISOString().split('T')[0]; // Format as YYYY-MM-DD
-  };
+  // We'll use fixed dates instead of the dynamic calculation
+  const startDate = "2025-01-15";
+  const endDate = "2025-03-01";
 
   try {
     // Instead of using transactionsSync, use the transactionsGet endpoint
     // This matches your successful Postman request
     const request = {
       access_token: accessToken,
-      start_date: getDateNDaysAgo(365), // Get transactions from up to a year ago
-      end_date: getTodayDate(),        // Up to today
+      start_date: startDate, // Fixed start date: Jan 15, 2025
+      end_date: endDate,     // Fixed end date: Mar 1, 2025
       options: {
         count: 100,
         offset: 0,
@@ -218,6 +210,9 @@ export const getTransactions = async ({
       pending: transaction.pending,
       category: transaction.category ? transaction.category[0] : "",
       date: transaction.date,
+      authorizedDate: transaction.authorized_date,
+      // Add time information - Plaid may provide datetime in various formats
+      timestamp: transaction.datetime || transaction.authorized_datetime || transaction.date, 
       image: transaction.logo_url,
     }));
 

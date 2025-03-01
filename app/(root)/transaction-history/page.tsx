@@ -54,7 +54,7 @@ const TransactionHistory = async ({
   const showReconnectionSuccess = reconnected === "true";
 
   return (
-    <div className="transactions">
+    <div className="transactions bg-black text-white min-h-screen p-6">
       <div className="transactions-header">
         <HeaderBox
           title="Transaction History"
@@ -62,7 +62,7 @@ const TransactionHistory = async ({
         />
 
         {showReconnectionSuccess && (
-          <div className="mt-4 p-4 bg-[#D1FAE5] rounded-md text-[#047857] font-medium">
+          <div className="mt-4 p-4 bg-green-900 rounded-md text-green-300 font-medium">
             Bank successfully reconnected! Your transaction history is now
             available.
           </div>
@@ -70,34 +70,34 @@ const TransactionHistory = async ({
       </div>
 
       <div className="space-y-6">
-        <div className="transactions-account">
+        <div className="transactions-account bg-gray-900 p-6 rounded-lg">
           <div className="flex flex-col gap-2">
             <h2 className="text-18 font-bold text-white">
               {account?.data?.name || "Account"}
             </h2>
-            <p className="text-14 text-blue-25">
+            <p className="text-14 text-blue-300">
               {account?.data?.officialName || ""}
             </p>
-            <p className="text-14 font-semibold tracking-[1.1px] text-white">
+            <p className="text-14 font-semibold tracking-[1.1px] text-gray-300">
               {account?.data?.mask ? `●●●● ●●●● ●●●● ${account.data.mask}` : ""}
             </p>
           </div>
 
-          <div className="transactions-account-balance">
-            <p className="text-14">Current balance</p>
-            <p className="text-24 text-center font-bold">
+          <div className="transactions-account-balance bg-gray-800 p-4 rounded-lg">
+            <p className="text-14 text-gray-300">Current balance</p>
+            <p className="text-24 text-center font-bold text-white">
               {formatAmount(account?.data?.currentBalance || 0)}
             </p>
           </div>
         </div>
 
         {transactionsNotReady ? (
-          <div className="my-6 p-6 bg-blue-50 rounded-md text-center">
-            <h3 className="text-xl font-medium text-blue-600 mb-2">
+          <div className="my-6 p-6 bg-gray-800 rounded-md text-center">
+            <h3 className="text-xl font-medium text-blue-300 mb-2">
               Preparing Your Transaction History
             </h3>
-            <p className="text-blue-700">{account.transactionsMessage}</p>
-            <p className="mt-4 text-sm text-blue-600">
+            <p className="text-gray-300">{account.transactionsMessage}</p>
+            <p className="mt-4 text-sm text-gray-400">
               This usually takes just a few moments. Try refreshing the page.
             </p>
             <a
