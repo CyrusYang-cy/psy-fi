@@ -698,14 +698,38 @@ const MoodMeter = ({ user }: MoodMeterProps) => {
 
   // Get filtered feelings based on search term and visible quadrants
   const filteredFeelings = useMemo(() => {
-    if (!searchTerm.trim()) return [];
+    const visibleFeelings = allFeelings.filter((feeling) =>
+      visibleQuadrants.includes(feeling.quadrant as QuadrantType)
+    );
 
-    return allFeelings.filter(
-      (feeling) =>
-        feeling.name.toLowerCase().includes(searchTerm.toLowerCase()) &&
-        visibleQuadrants.includes(feeling.quadrant as QuadrantType)
+    // Sort feelings alphabetically
+    const sortedFeelings = [...visibleFeelings].sort((a, b) =>
+      a.name.localeCompare(b.name)
+    );
+
+    // If search bar is empty, return all feelings
+    if (!searchTerm.trim()) return sortedFeelings;
+
+    // Filter based on search term
+    return sortedFeelings.filter((feeling) =>
+      feeling.name.toLowerCase().includes(searchTerm.toLowerCase())
     );
   }, [allFeelings, searchTerm, visibleQuadrants]);
+
+  const [isSearchFocused, setIsSearchFocused] = useState(false);
+
+  // Handle search input focus
+  const handleSearchFocus = () => {
+    setIsSearchFocused(true);
+  };
+
+  // Handle search input blur
+  const handleSearchBlur = (e: React.FocusEvent<HTMLInputElement>) => {
+    // Delay hiding the dropdown to allow for click events on the options
+    setTimeout(() => {
+      setIsSearchFocused(false);
+    }, 200);
+  };
 
   // Handle search input change
   const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -1035,6 +1059,8 @@ const MoodMeter = ({ user }: MoodMeterProps) => {
                       type="text"
                       value={searchTerm}
                       onChange={handleSearchChange}
+                      onFocus={handleSearchFocus}
+                      onBlur={handleSearchBlur}
                       placeholder="Search for feelings..."
                       className="w-full p-3 pl-10 bg-gray-800/70 border border-gray-700 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-200"
                     />
@@ -1054,10 +1080,10 @@ const MoodMeter = ({ user }: MoodMeterProps) => {
                     </svg>
 
                     {/* Search results dropdown */}
-                    {searchTerm.trim() !== "" &&
-                      filteredFeelings.length > 0 && (
-                        <div className="absolute z-10 w-full mt-1 bg-gray-800 border border-gray-700 rounded-lg shadow-lg max-h-60 overflow-y-auto">
-                          {filteredFeelings.map((feeling) => {
+                    {(isSearchFocused || searchTerm.trim() !== "") && (
+                      <div className="absolute z-10 w-full mt-1 bg-gray-800 border border-gray-700 rounded-lg shadow-lg max-h-60 overflow-y-auto">
+                        {filteredFeelings.length > 0 ? (
+                          filteredFeelings.map((feeling) => {
                             const colors = getQuadrantColors(
                               feeling.quadrant as QuadrantType
                             );
@@ -1083,16 +1109,14 @@ const MoodMeter = ({ user }: MoodMeterProps) => {
                                 </span>
                               </div>
                             );
-                          })}
-                        </div>
-                      )}
-
-                    {searchTerm.trim() !== "" &&
-                      filteredFeelings.length === 0 && (
-                        <div className="absolute z-10 w-full mt-1 bg-gray-800 border border-gray-700 rounded-lg shadow-lg p-3 text-gray-400">
-                          No feelings found matching "{searchTerm}"
-                        </div>
-                      )}
+                          })
+                        ) : (
+                          <div className="p-3 text-gray-400">
+                            No feelings found matching "{searchTerm}"
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
                 </div>
 

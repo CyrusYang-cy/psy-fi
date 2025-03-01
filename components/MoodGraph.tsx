@@ -2,7 +2,24 @@
 
 import { useState, useRef, useEffect } from "react";
 import { MOOD_QUADRANTS } from "@/lib/constants/mood";
-import { format, parseISO } from "date-fns";
+import {
+  format,
+  parseISO,
+  subDays,
+  subMonths,
+  subWeeks,
+  startOfDay,
+  endOfDay,
+  addDays,
+  setHours,
+  setMinutes,
+  isSameDay,
+  differenceInDays,
+  startOfMonth,
+  endOfMonth,
+  eachDayOfInterval,
+  isWithinInterval,
+} from "date-fns";
 
 type MoodGraphProps = {
   entries: any[];
@@ -18,12 +35,16 @@ const SIGNIFICANT_EVENTS = [
   { date: "2024-02-14", label: "Valentine's Day" },
 ];
 
+// Time scale options
+type TimeScale = "1D" | "1W" | "1M";
+
 const MoodGraph = ({ entries }: MoodGraphProps) => {
   const [hoveredEntry, setHoveredEntry] = useState<any | null>(null);
   const [hoverPosition, setHoverPosition] = useState<{
     x: number;
     y: number;
   } | null>(null);
+  const [timeScale, setTimeScale] = useState<TimeScale>("1W");
   const graphRef = useRef<HTMLDivElement>(null);
 
   // Sort entries by date
@@ -31,43 +52,188 @@ const MoodGraph = ({ entries }: MoodGraphProps) => {
     (a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
   );
 
-  // Get the last 14 days of entries for the graph
-  const recentEntries = sortedEntries.slice(-14);
+  // Filter entries based on selected time scale
+  const getFilteredEntries = () => {
+    const now = new Date();
+    let startDate: Date;
+    let endDate: Date;
 
-  // Map quadrants to y-axis positions (0-100)
-  const getYPosition = (quadrant: string) => {
-    switch (quadrant) {
-      case "yellow":
-        return 20; // High energy, high pleasantness
-      case "red":
-        return 40; // High energy, low pleasantness
-      case "green":
-        return 60; // Low energy, high pleasantness
-      case "blue":
-        return 80; // Low energy, low pleasantness
+    switch (timeScale) {
+      case "1D":
+        // For 1D, show from 5 AM today to midnight of the next day
+        startDate = setMinutes(setHours(startOfDay(now), 5), 0);
+        endDate = endOfDay(now);
+        break;
+      case "1W":
+        // For 1W, show the last 7 days
+        startDate = startOfDay(subDays(now, 6)); // 6 days ago + today = 7 days
+        endDate = endOfDay(now);
+        break;
+      case "1M":
+        // For 1M, show the current month
+        startDate = startOfMonth(now);
+        endDate = endOfMonth(now);
+        break;
       default:
-        return 50;
+        startDate = startOfDay(subWeeks(now, 1));
+        endDate = endOfDay(now);
     }
+
+    return sortedEntries.filter((entry) => {
+      const entryDate = new Date(entry.timestamp);
+      return entryDate >= startDate && entryDate <= endDate;
+    });
   };
 
-  // Calculate emotion intensity based on quadrant and feeling
-  const getEmotionIntensity = (entry: any) => {
-    // This is a simplified calculation - could be more sophisticated
-    const intensityMap = {
-      yellow: 0.8, // High energy, high pleasantness
-      red: 0.9, // High energy, low pleasantness
-      green: 0.6, // Low energy, high pleasantness
-      blue: 0.7, // Low energy, low pleasantness
-    };
+  // Aggregate data for time scales
+  const getAggregatedData = () => {
+    const filteredEntries = getFilteredEntries();
 
-    const baseIntensity =
-      intensityMap[entry.quadrant as keyof typeof intensityMap] || 0.5;
+    if (filteredEntries.length === 0) {
+      return [];
+    }
 
-    // Add some randomness to simulate varying intensities
-    const randomFactor = 0.1 * (Math.random() - 0.5);
-    return Math.min(Math.max(baseIntensity + randomFactor, 0.1), 1.0).toFixed(
-      2
+    // For 1D, organize entries by hour
+    if (timeScale === "1D") {
+      return filteredEntries;
+    }
+
+    // For 1W and 1M, aggregate data by day
+    const entriesByDay: Record<string, any[]> = {};
+    const now = new Date();
+    let dateRange: Date[] = [];
+
+    if (timeScale === "1W") {
+      // Create array of the last 7 days
+      for (let i = 6; i >= 0; i--) {
+        dateRange.push(subDays(now, i));
+      }
+    } else if (timeScale === "1M") {
+      // Create array of all days in the current month
+      dateRange = eachDayOfInterval({
+        start: startOfMonth(now),
+        end: endOfMonth(now),
+      });
+    }
+
+    // Initialize empty arrays for each day
+    dateRange.forEach((date) => {
+      const dayKey = format(date, "yyyy-MM-dd");
+      entriesByDay[dayKey] = [];
+    });
+
+    // Group entries by day
+    filteredEntries.forEach((entry) => {
+      const day = format(new Date(entry.timestamp), "yyyy-MM-dd");
+      if (entriesByDay[day] !== undefined) {
+        entriesByDay[day].push(entry);
+      }
+    });
+
+    // Calculate average values for each day
+    const aggregatedData: any[] = [];
+
+    Object.entries(entriesByDay).forEach(([day, dayEntries]) => {
+      if (dayEntries.length === 0) {
+        // Add placeholder for days with no entries
+        aggregatedData.push({
+          $id: `placeholder-${day}`,
+          timestamp: `${day}T12:00:00.000Z`,
+          quadrant: "none",
+          feeling: "none",
+          isPlaceholder: true,
+          entriesCount: 0,
+        });
+        return;
+      }
+
+      // Calculate average valence and arousal
+      const totalValence = dayEntries.reduce((sum, entry) => {
+        const feeling = MOOD_QUADRANTS[
+          entry.quadrant as keyof typeof MOOD_QUADRANTS
+        ]?.feelings.find((f) => f.name === entry.feeling);
+        return sum + (feeling?.valence || 0);
+      }, 0);
+
+      const totalArousal = dayEntries.reduce((sum, entry) => {
+        const feeling = MOOD_QUADRANTS[
+          entry.quadrant as keyof typeof MOOD_QUADRANTS
+        ]?.feelings.find((f) => f.name === entry.feeling);
+        return sum + (feeling?.arousal || 0);
+      }, 0);
+
+      // Use the first entry of the day as a template and update with averages
+      const aggregatedEntry = {
+        ...dayEntries[0],
+        timestamp: `${day}T12:00:00.000Z`, // Set to noon for consistent display
+        avgValence: totalValence / dayEntries.length,
+        avgArousal: totalArousal / dayEntries.length,
+        entriesCount: dayEntries.length,
+        originalEntries: dayEntries,
+      };
+
+      aggregatedData.push(aggregatedEntry);
+    });
+
+    return aggregatedData.sort(
+      (a, b) =>
+        new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
     );
+  };
+
+  const displayedEntries = getAggregatedData();
+
+  // Get feeling information for a specific entry
+  const getFeelingInfo = (entry: any) => {
+    if (entry.isPlaceholder) {
+      return { valence: null, arousal: null };
+    }
+
+    const quadrant =
+      MOOD_QUADRANTS[entry.quadrant as keyof typeof MOOD_QUADRANTS];
+    if (!quadrant) return { valence: 0, arousal: 0 };
+
+    const feeling = quadrant.feelings.find((f) => f.name === entry.feeling);
+    if (!feeling) return { valence: 0, arousal: 0 };
+
+    return {
+      valence:
+        entry.avgValence !== undefined ? entry.avgValence : feeling.valence,
+      arousal:
+        entry.avgArousal !== undefined ? entry.avgArousal : feeling.arousal,
+    };
+  };
+
+  // Map valence/arousal values (-1 to 1) to y-axis positions (0-100)
+  const getYPosition = (value: number | null) => {
+    if (value === null) return 50; // Center for placeholder entries
+    // Convert from [-1, 1] to [0, 100]
+    return 50 - value * 40;
+  };
+
+  // Get X position based on time scale
+  const getXPosition = (entry: any, index: number, entries: any[]) => {
+    if (timeScale === "1D") {
+      // For 1D, position based on time of day
+      const entryDate = new Date(entry.timestamp);
+      const startOfToday = setMinutes(setHours(startOfDay(new Date()), 5), 0); // 5 AM
+      const endOfToday = endOfDay(new Date()); // Midnight
+      const totalMinutes =
+        (endOfToday.getTime() - startOfToday.getTime()) / (1000 * 60);
+      const entryMinutes =
+        (entryDate.getTime() - startOfToday.getTime()) / (1000 * 60);
+
+      // If entry is before 5 AM, position at start
+      if (entryMinutes < 0) return 0;
+
+      // If entry is after midnight, position at end
+      if (entryMinutes > totalMinutes) return 100;
+
+      return (entryMinutes / totalMinutes) * 100;
+    } else {
+      // For 1W and 1M, evenly space entries
+      return (index / (entries.length - 1 || 1)) * 100;
+    }
   };
 
   const handleMouseMove = (e: React.MouseEvent, entry: any) => {
@@ -108,6 +274,35 @@ const MoodGraph = ({ entries }: MoodGraphProps) => {
     return SIGNIFICANT_EVENTS.find((event) => event.date === entryDate);
   };
 
+  // Format X-axis labels based on time scale
+  const formatXAxisLabels = () => {
+    if (!displayedEntries || displayedEntries.length === 0) {
+      return [];
+    }
+
+    if (timeScale === "1D") {
+      // For 1D, show hours
+      const today = new Date();
+      return [
+        format(setHours(today, 5), "h a"), // 5 AM
+        format(setHours(today, 9), "h a"), // 9 AM
+        format(setHours(today, 13), "h a"), // 1 PM
+        format(setHours(today, 17), "h a"), // 5 PM
+        format(setHours(today, 21), "h a"), // 9 PM
+        format(setHours(addDays(today, 1), 0), "h a"), // 12 AM
+      ];
+    } else {
+      // For 1W and 1M, show first and last date
+      return [
+        format(new Date(displayedEntries[0].timestamp), "MMM d"),
+        format(
+          new Date(displayedEntries[displayedEntries.length - 1].timestamp),
+          "MMM d"
+        ),
+      ];
+    }
+  };
+
   if (!entries || entries.length === 0) {
     return (
       <div className="text-center p-4 bg-gray-800 rounded-xl">
@@ -118,49 +313,123 @@ const MoodGraph = ({ entries }: MoodGraphProps) => {
 
   return (
     <div className="p-4 bg-gray-800 rounded-xl">
-      <h3 className="text-lg font-semibold mb-4 text-white">Mood Trends</h3>
+      <div className="flex justify-between items-center mb-4">
+        <h3 className="text-lg font-semibold text-white">Mood Trends</h3>
+
+        {/* Time scale selector */}
+        <div className="flex bg-gray-700 rounded-lg p-0.5">
+          {(["1D", "1W", "1M"] as TimeScale[]).map((scale) => (
+            <button
+              key={scale}
+              className={`px-3 py-1 text-xs rounded-md transition ${
+                timeScale === scale
+                  ? "bg-blue-500 text-white"
+                  : "text-gray-300 hover:bg-gray-600"
+              }`}
+              onClick={() => setTimeScale(scale)}
+            >
+              {scale}
+            </button>
+          ))}
+        </div>
+      </div>
 
       <div
         ref={graphRef}
-        className="relative h-40 w-full border-b border-l border-gray-600 mt-2 ml-8"
+        className="relative h-56 w-full border-b border-l border-gray-600 mt-2 ml-8"
       >
-        {/* Y-axis labels - simplified to just color names */}
-        <div className="absolute -left-8 top-4 text-xs text-yellow-400 font-medium">
-          Yellow
-        </div>
-        <div className="absolute -left-8 top-16 text-xs text-red-400 font-medium">
-          Red
-        </div>
-        <div className="absolute -left-8 top-28 text-xs text-green-400 font-medium">
-          Green
-        </div>
-        <div className="absolute -left-8 top-36 text-xs text-blue-400 font-medium">
-          Blue
+        {/* Y-axis labels and grid lines */}
+        <div className="absolute -left-7 top-0 h-full flex flex-col justify-between">
+          <div className="text-xs text-gray-400">+1</div>
+          <div className="text-xs text-gray-400 -ml-2">+0.5</div>
+          <div className="text-xs text-gray-400 -ml-1">0</div>
+          <div className="text-xs text-gray-400 -ml-2">-0.5</div>
+          <div className="text-xs text-gray-400">-1</div>
         </div>
 
-        {/* Connect points with lines - moved before points to ensure points are on top */}
+        {/* Horizontal grid lines */}
+        <div className="absolute top-0 left-0 w-full h-full">
+          <div className="absolute top-0 w-full h-px bg-gray-700" />
+          <div className="absolute top-1/4 w-full h-px bg-gray-700" />
+          <div className="absolute top-1/2 w-full h-px bg-gray-700" />
+          <div className="absolute top-3/4 w-full h-px bg-gray-700" />
+          <div className="absolute bottom-0 w-full h-px bg-gray-700" />
+        </div>
+
+        {/* X-axis grid lines for 1D view */}
+        {timeScale === "1D" && (
+          <div className="absolute top-0 left-0 w-full h-full">
+            {[0, 20, 40, 60, 80, 100].map((position) => (
+              <div
+                key={`x-grid-${position}`}
+                className="absolute h-full w-px bg-gray-700/50"
+                style={{ left: `${position}%` }}
+              />
+            ))}
+          </div>
+        )}
+
+        {/* Connect valence points with lines */}
         <svg
           className="absolute inset-0 h-full w-full pointer-events-none"
           style={{ zIndex: 1 }}
         >
-          {recentEntries.map((entry, index) => {
+          {displayedEntries.map((entry, index, array) => {
             if (index === 0) return null;
+            if (entry.isPlaceholder || array[index - 1].isPlaceholder)
+              return null;
 
-            const prevEntry = recentEntries[index - 1];
-            const x1 = ((index - 1) / (recentEntries.length - 1 || 1)) * 100;
-            const y1 = getYPosition(prevEntry.quadrant);
-            const x2 = (index / (recentEntries.length - 1 || 1)) * 100;
-            const y2 = getYPosition(entry.quadrant);
+            const prevEntry = array[index - 1];
+            const x1 = getXPosition(prevEntry, index - 1, array);
+            const feelingInfo = getFeelingInfo(prevEntry);
+            const y1 = getYPosition(feelingInfo.valence);
+
+            const x2 = getXPosition(entry, index, array);
+            const currentFeelingInfo = getFeelingInfo(entry);
+            const y2 = getYPosition(currentFeelingInfo.valence);
 
             return (
               <line
-                key={`line-${index}`}
+                key={`valence-line-${index}`}
                 x1={`${x1}%`}
                 y1={`${y1}%`}
                 x2={`${x2}%`}
                 y2={`${y2}%`}
-                stroke="rgba(255,255,255,0.3)"
-                strokeWidth="1"
+                stroke="rgba(59, 130, 246, 0.6)"
+                strokeWidth="2"
+              />
+            );
+          })}
+        </svg>
+
+        {/* Connect arousal points with lines */}
+        <svg
+          className="absolute inset-0 h-full w-full pointer-events-none"
+          style={{ zIndex: 1 }}
+        >
+          {displayedEntries.map((entry, index, array) => {
+            if (index === 0) return null;
+            if (entry.isPlaceholder || array[index - 1].isPlaceholder)
+              return null;
+
+            const prevEntry = array[index - 1];
+            const x1 = getXPosition(prevEntry, index - 1, array);
+            const feelingInfo = getFeelingInfo(prevEntry);
+            const y1 = getYPosition(feelingInfo.arousal);
+
+            const x2 = getXPosition(entry, index, array);
+            const currentFeelingInfo = getFeelingInfo(entry);
+            const y2 = getYPosition(currentFeelingInfo.arousal);
+
+            return (
+              <line
+                key={`arousal-line-${index}`}
+                x1={`${x1}%`}
+                y1={`${y1}%`}
+                x2={`${x2}%`}
+                y2={`${y2}%`}
+                stroke="rgba(239, 68, 68, 0.6)"
+                strokeWidth="2"
               />
             );
           })}
@@ -168,36 +437,68 @@ const MoodGraph = ({ entries }: MoodGraphProps) => {
 
         {/* Graph points */}
         <div className="relative h-full w-full" style={{ zIndex: 10 }}>
-          {recentEntries.map((entry, index) => {
-            const xPos = (index / (recentEntries.length - 1 || 1)) * 100;
-            const yPos = getYPosition(entry.quadrant);
+          {displayedEntries.map((entry, index, array) => {
+            if (entry.isPlaceholder) return null;
+
+            const xPos = getXPosition(entry, index, array);
+            const feelingInfo = getFeelingInfo(entry);
+            const valencePos = getYPosition(feelingInfo.valence);
+            const arousalPos = getYPosition(feelingInfo.arousal);
             const hasEvent = findSignificantEvent(entry.timestamp);
 
             return (
-              <div
-                key={entry.$id}
-                className="absolute"
-                style={{
-                  left: `${xPos}%`,
-                  top: `${yPos}%`,
-                  zIndex: 20,
-                }}
-              >
-                {/* The mood point */}
+              <div key={`points-${entry.$id || index}`}>
+                {/* Valence point */}
                 <div
-                  className={`w-3 h-3 rounded-full ${getQuadrantColor(
-                    entry.quadrant
-                  )} transform -translate-x-1/2 -translate-y-1/2 cursor-pointer ${
-                    hasEvent ? "ring-2 ring-white ring-opacity-70" : ""
-                  }`}
-                  style={{ zIndex: 30 }}
-                  onMouseMove={(e) => handleMouseMove(e, entry)}
-                  onMouseLeave={handleMouseLeave}
-                />
+                  className="absolute"
+                  style={{
+                    left: `${xPos}%`,
+                    top: `${valencePos}%`,
+                    zIndex: 20,
+                  }}
+                >
+                  <div
+                    className={`w-3 h-3 rounded-full bg-blue-500 transform -translate-x-1/2 -translate-y-1/2 cursor-pointer ${
+                      entry.entriesCount > 1
+                        ? "ring-1 ring-white ring-opacity-70"
+                        : ""
+                    }`}
+                    style={{ zIndex: 30 }}
+                    onMouseMove={(e) => handleMouseMove(e, entry)}
+                    onMouseLeave={handleMouseLeave}
+                  />
+                </div>
+
+                {/* Arousal point */}
+                <div
+                  className="absolute"
+                  style={{
+                    left: `${xPos}%`,
+                    top: `${arousalPos}%`,
+                    zIndex: 20,
+                  }}
+                >
+                  <div
+                    className={`w-3 h-3 rounded-full bg-red-500 transform -translate-x-1/2 -translate-y-1/2 cursor-pointer ${
+                      entry.entriesCount > 1
+                        ? "ring-1 ring-white ring-opacity-70"
+                        : ""
+                    }`}
+                    style={{ zIndex: 30 }}
+                    onMouseMove={(e) => handleMouseMove(e, entry)}
+                    onMouseLeave={handleMouseLeave}
+                  />
+                </div>
 
                 {/* Annotation marker for significant events */}
                 {hasEvent && (
-                  <div className="absolute top-4 left-0 transform -translate-x-1/2 pointer-events-none">
+                  <div
+                    className="absolute transform -translate-x-1/2 pointer-events-none"
+                    style={{
+                      left: `${xPos}%`,
+                      top: "100%",
+                    }}
+                  >
                     <div className="w-0.5 h-4 bg-white/50"></div>
                     <div className="text-xs text-white/70 whitespace-nowrap transform -rotate-45 origin-top-left mt-1">
                       {hasEvent.label}
@@ -228,54 +529,100 @@ const MoodGraph = ({ entries }: MoodGraphProps) => {
               >
                 <div className="flex justify-between items-center mb-1">
                   <p className="font-semibold">
-                    {format(new Date(hoveredEntry.timestamp), "MMM d, yyyy")}
+                    {timeScale === "1D"
+                      ? format(
+                          new Date(hoveredEntry.timestamp),
+                          "MMM d, h:mm a"
+                        )
+                      : format(new Date(hoveredEntry.timestamp), "MMM d, yyyy")}
                   </p>
-                  <span className="text-[10px] text-gray-400">
-                    {format(new Date(hoveredEntry.timestamp), "h:mm a")}
-                  </span>
-                </div>
-
-                <div className="flex items-center gap-2 mb-1">
-                  <div
-                    className={`w-2 h-2 rounded-full ${getQuadrantColor(
-                      hoveredEntry.quadrant
-                    )}`}
-                  ></div>
-                  <p>
-                    <span className="font-medium">{hoveredEntry.feeling}</span>
-                    <span className="text-gray-400 ml-1">
-                      (
-                      {
-                        MOOD_QUADRANTS[
-                          hoveredEntry.quadrant as keyof typeof MOOD_QUADRANTS
-                        ].name
-                      }
-                      )
+                  {timeScale !== "1D" && (
+                    <span className="text-[10px] text-gray-400">
+                      {hoveredEntry.entriesCount} entries
                     </span>
-                  </p>
+                  )}
                 </div>
 
-                <div className="mt-1 mb-2">
-                  <p className="text-[10px] text-gray-400">Emotion Intensity</p>
-                  <div className="w-full bg-gray-700 h-1.5 rounded-full mt-1">
+                {timeScale === "1D" && (
+                  <div className="flex items-center gap-2 mb-1">
                     <div
-                      className={`h-full rounded-full ${
-                        hoveredEntry.quadrant === "red"
-                          ? "bg-red-500"
-                          : hoveredEntry.quadrant === "blue"
-                          ? "bg-blue-500"
-                          : hoveredEntry.quadrant === "green"
-                          ? "bg-green-500"
-                          : "bg-yellow-500"
-                      }`}
-                      style={{
-                        width: `${
-                          parseFloat(getEmotionIntensity(hoveredEntry)) * 100
-                        }%`,
-                      }}
+                      className={`w-2 h-2 rounded-full ${getQuadrantColor(
+                        hoveredEntry.quadrant
+                      )}`}
                     ></div>
+                    <p>
+                      <span className="font-medium">
+                        {hoveredEntry.feeling}
+                      </span>
+                      <span className="text-gray-400 ml-1">
+                        (
+                        {
+                          MOOD_QUADRANTS[
+                            hoveredEntry.quadrant as keyof typeof MOOD_QUADRANTS
+                          ]?.name
+                        }
+                        )
+                      </span>
+                    </p>
+                  </div>
+                )}
+
+                {/* Show valence and arousal values */}
+                <div className="grid grid-cols-2 gap-2 mt-2">
+                  <div>
+                    <p className="text-[10px] text-gray-400">Valence</p>
+                    <p className="font-medium text-blue-400">
+                      {getFeelingInfo(hoveredEntry).valence?.toFixed(2) ||
+                        "N/A"}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-[10px] text-gray-400">Arousal</p>
+                    <p className="font-medium text-red-400">
+                      {getFeelingInfo(hoveredEntry).arousal?.toFixed(2) ||
+                        "N/A"}
+                    </p>
                   </div>
                 </div>
+
+                {/* Show entry count if aggregated */}
+                {hoveredEntry.entriesCount > 1 &&
+                  timeScale !== "1D" &&
+                  hoveredEntry.originalEntries && (
+                    <div className="mt-2 pt-1 border-t border-gray-700">
+                      <p className="text-[10px] text-gray-400 mb-1">
+                        Entries this day:
+                      </p>
+                      <div className="max-h-20 overflow-y-auto">
+                        {hoveredEntry.originalEntries
+                          .slice(0, 3)
+                          .map((entry: any, i: number) => (
+                            <div
+                              key={`entry-${i}`}
+                              className="flex items-center gap-1 mb-1"
+                            >
+                              <div
+                                className={`w-1.5 h-1.5 rounded-full ${getQuadrantColor(
+                                  entry.quadrant
+                                )}`}
+                              ></div>
+                              <span className="text-[10px]">
+                                {entry.feeling}
+                              </span>
+                              <span className="text-[9px] text-gray-400 ml-auto">
+                                {format(new Date(entry.timestamp), "h:mm a")}
+                              </span>
+                            </div>
+                          ))}
+                        {hoveredEntry.originalEntries.length > 3 && (
+                          <p className="text-[9px] text-gray-400 italic">
+                            +{hoveredEntry.originalEntries.length - 3} more
+                            entries
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  )}
 
                 {hoveredEntry.note && (
                   <p className="mt-1 italic border-t border-gray-700 pt-1">
@@ -297,27 +644,51 @@ const MoodGraph = ({ entries }: MoodGraphProps) => {
         </div>
       </div>
 
-      {/* X-axis dates */}
+      {/* X-axis labels */}
       <div className="flex justify-between mt-1 text-xs text-gray-400 ml-8">
-        {recentEntries.length > 0 && (
-          <>
-            <span>{format(new Date(recentEntries[0].timestamp), "MMM d")}</span>
-            {recentEntries.length > 1 && (
+        {timeScale === "1D" ? (
+          // For 1D, show hour markers
+          <div className="w-full flex justify-between">
+            {formatXAxisLabels().map((label, index) => (
+              <span key={`x-label-${index}`}>{label}</span>
+            ))}
+          </div>
+        ) : (
+          // For 1W and 1M, show start and end dates
+          displayedEntries.length > 0 && (
+            <>
               <span>
-                {format(
-                  new Date(recentEntries[recentEntries.length - 1].timestamp),
-                  "MMM d"
-                )}
+                {format(new Date(displayedEntries[0].timestamp), "MMM d")}
               </span>
-            )}
-          </>
+              {displayedEntries.length > 1 && (
+                <span>
+                  {format(
+                    new Date(
+                      displayedEntries[displayedEntries.length - 1].timestamp
+                    ),
+                    "MMM d"
+                  )}
+                </span>
+              )}
+            </>
+          )
         )}
       </div>
 
-      {/* Legend for annotations */}
-      <div className="mt-4 flex items-center">
-        <div className="w-3 h-3 rounded-full bg-gray-500 ring-2 ring-white ring-opacity-70 mr-2"></div>
-        <span className="text-xs text-gray-300">Significant event</span>
+      {/* Legend */}
+      <div className="mt-4 flex flex-wrap items-center gap-4">
+        <div className="flex items-center">
+          <div className="w-3 h-3 rounded-full bg-blue-500 mr-2"></div>
+          <span className="text-xs text-gray-300">Valence (pleasantness)</span>
+        </div>
+        <div className="flex items-center">
+          <div className="w-3 h-3 rounded-full bg-red-500 mr-2"></div>
+          <span className="text-xs text-gray-300">Arousal (energy)</span>
+        </div>
+        <div className="flex items-center">
+          <div className="w-3 h-3 rounded-full bg-gray-500 ring-1 ring-white ring-opacity-70 mr-2"></div>
+          <span className="text-xs text-gray-300">Multiple entries (avg)</span>
+        </div>
       </div>
     </div>
   );

@@ -31,6 +31,37 @@ export const MOOD_QUADRANTS = {
       { name: "worried", definition: "Anxious or troubled about actual or potential problems", valence: -0.812, arousal: 0.648 },
     ]
   },
+  yellow: {
+    name: "Yellow",
+    description: "High energy, high pleasantness",
+    feelings: [
+      { name: "surprised", definition: "Feeling astonished or caught off guard", valence: 0.568, arousal: 0.71 },
+      { name: "excited", definition: "Very enthusiastic and eager", valence: 0.816, arousal: 0.862 },
+      { name: "cheerful", definition: "Having a pleasant and optimistic disposition", valence: 0.98, arousal: 0.44 },
+      { name: "pleased", definition: "Feeling satisfied or content", valence: 0.878, arousal: 0.096 },
+      { name: "determined", definition: "Having a firm intention or decision", valence: 0.52, arousal: 0.056 },
+      { name: "eager", definition: "Feeling enthusiastic and impatient to do something", valence: 0.042, arousal: 0.624 },
+      { name: "curious", definition: "Eager to know or learn something", valence: 0.27, arousal: 0.2 },
+      { name: "playful", definition: "Having a lighthearted and humorous nature", valence: 0.784, arousal: 0.376 },
+      { name: "exhilarated", definition: "Feeling extremely happy or excited", valence: 0.78, arousal: 0.926 },
+      { name: "successful", definition: "Achieving a desired goal or outcome", valence: 0.898, arousal: 0.448 },
+      { name: "enthusiastic", definition: "Feeling intense excitement and interest", valence: 0.77, arousal: 0.736 },
+      { name: "upbeat", definition: "Having a cheerful and optimistic outlook", valence: 0.756, arousal: 0.062 },
+      { name: "alive", definition: "Feeling full of energy and vitality", valence: 0.632, arousal: 0.274 },
+      { name: "delighted", definition: "Feeling great pleasure or enjoyment", valence: 0.876, arousal: 0.328 },
+      { name: "thrilled", definition: "Feeling extremely excited or pleased", valence: 0.796, arousal: 0.636 },
+      { name: "amazed", definition: "Feeling great surprise or wonder", valence: 0.592, arousal: 0.558 },
+      { name: "joyful", definition: "Feeling great happiness or pleasure", valence: 0.98, arousal: 0.48 },
+      { name: "happy", definition: "Feeling or showing pleasure or contentment", valence: 1.0, arousal: 0.47 },
+      { name: "wishful", definition: "Feeling a strong desire or longing", valence: 0.77, arousal: 0.424 },
+      { name: "inspired", definition: "Feeling motivated or influenced to do something", valence: 0.934, arousal: 0.404 },
+      { name: "productive", definition: "Achieving a lot in a short time", valence: 0.694, arousal: 0.354 },
+      { name: "engaged", definition: "Actively participating or involved", valence: 0.674, arousal: 0.192 },
+      { name: "ecstatic", definition: "Feeling overwhelming happiness or excitement", valence: 0.75, arousal: 0.538 },
+      { name: "optimistic", definition: "Having a positive outlook on life", valence: 0.958, arousal: 0.16 },
+      { name: "accomplished", definition: "Feeling proud of one's achievements", valence: 0.74, arousal: 0.04 }
+    ]
+  }, 
   blue: {
     name: "Blue",
     description: "Low energy, low pleasantness",
@@ -91,37 +122,6 @@ export const MOOD_QUADRANTS = {
       { name: "balanced", definition: "Having a stable and healthy mental state", valence: 0.612, arousal: -0.49 },
       { name: "thankful", definition: "Feeling or expressing gratitude", valence: 0.938, arousal: -0.312 },
       { name: "respected", definition: "Feeling or deserving of respect", valence: 0.816, arousal: -0.118 }
-    ]
-  },
-  yellow: {
-    name: "Yellow",
-    description: "High energy, high pleasantness",
-    feelings: [
-      { name: "surprised", definition: "Feeling astonished or caught off guard", valence: 0.568, arousal: 0.71 },
-      { name: "excited", definition: "Very enthusiastic and eager", valence: 0.816, arousal: 0.862 },
-      { name: "cheerful", definition: "Having a pleasant and optimistic disposition", valence: 0.98, arousal: 0.44 },
-      { name: "pleased", definition: "Feeling satisfied or content", valence: 0.878, arousal: 0.096 },
-      { name: "determined", definition: "Having a firm intention or decision", valence: 0.52, arousal: 0.056 },
-      { name: "eager", definition: "Feeling enthusiastic and impatient to do something", valence: 0.042, arousal: 0.624 },
-      { name: "curious", definition: "Eager to know or learn something", valence: 0.27, arousal: 0.2 },
-      { name: "playful", definition: "Having a lighthearted and humorous nature", valence: 0.784, arousal: 0.376 },
-      { name: "exhilarated", definition: "Feeling extremely happy or excited", valence: 0.78, arousal: 0.926 },
-      { name: "successful", definition: "Achieving a desired goal or outcome", valence: 0.898, arousal: 0.448 },
-      { name: "enthusiastic", definition: "Feeling intense excitement and interest", valence: 0.77, arousal: 0.736 },
-      { name: "upbeat", definition: "Having a cheerful and optimistic outlook", valence: 0.756, arousal: 0.062 },
-      { name: "alive", definition: "Feeling full of energy and vitality", valence: 0.632, arousal: 0.274 },
-      { name: "delighted", definition: "Feeling great pleasure or enjoyment", valence: 0.876, arousal: 0.328 },
-      { name: "thrilled", definition: "Feeling extremely excited or pleased", valence: 0.796, arousal: 0.636 },
-      { name: "amazed", definition: "Feeling great surprise or wonder", valence: 0.592, arousal: 0.558 },
-      { name: "joyful", definition: "Feeling great happiness or pleasure", valence: 0.98, arousal: 0.48 },
-      { name: "happy", definition: "Feeling or showing pleasure or contentment", valence: 1.0, arousal: 0.47 },
-      { name: "wishful", definition: "Feeling a strong desire or longing", valence: 0.77, arousal: 0.424 },
-      { name: "inspired", definition: "Feeling motivated or influenced to do something", valence: 0.934, arousal: 0.404 },
-      { name: "productive", definition: "Achieving a lot in a short time", valence: 0.694, arousal: 0.354 },
-      { name: "engaged", definition: "Actively participating or involved", valence: 0.674, arousal: 0.192 },
-      { name: "ecstatic", definition: "Feeling overwhelming happiness or excitement", valence: 0.75, arousal: 0.538 },
-      { name: "optimistic", definition: "Having a positive outlook on life", valence: 0.958, arousal: 0.16 },
-      { name: "accomplished", definition: "Feeling proud of one's achievements", valence: 0.74, arousal: 0.04 }
     ]
   }
 }; 

@@ -24,11 +24,6 @@ export default async function AnalysisPage() {
   return (
     <main className="flex-center flex-col paddings">
       <section className="w-full max-w-5xl">
-        <div className="flex-between mb-8">
-          <h1 className="head-text">Mood Analysis</h1>
-          <p className="text-lg">Track your mood patterns over time</p>
-        </div>
-
         <div className="mt-8">
           <MoodGraph entries={moodEntries} />
         </div>

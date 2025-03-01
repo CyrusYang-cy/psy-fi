@@ -1,7 +1,22 @@
-export default function AnalysisLayout({
+import { getLoggedInUser } from "@/lib/actions/user.actions";
+import Sidebar from "@/components/Sidebar";
+import { redirect } from "next/navigation";
+
+export default async function AnalysisLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  return <>{children}</>;
+  const user = await getLoggedInUser();
+
+  if (!user) {
+    redirect("/login");
+  }
+
+  return (
+    <main className="flex flex-row">
+      <Sidebar user={user} />
+      <section className="flex-1">{children}</section>
+    </main>
+  );
 }
