@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef, useMemo } from "react";
+import { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { logMood } from "@/lib/actions/mood.actions";
 import { MOOD_QUADRANTS } from "@/lib/constants/mood";
 import { motion, AnimatePresence } from "framer-motion";
@@ -76,6 +76,7 @@ const MoodMeter = ({ user }: MoodMeterProps) => {
   const [selectedFeeling, setSelectedFeeling] = useState<string | null>(null);
   const [selectedFeelingData, setSelectedFeelingData] =
     useState<Feeling | null>(null);
+  const [hoveredFeeling, setHoveredFeeling] = useState<Feeling | null>(null);
   const [note, setNote] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [success, setSuccess] = useState(false);
@@ -84,6 +85,8 @@ const MoodMeter = ({ user }: MoodMeterProps) => {
     null
   );
   const chartRef = useRef<ChartJS<"scatter">>(null);
+  // Add ref to track current hovered feeling to prevent unnecessary updates
+  const currentHoveredFeelingRef = useRef<string | null>(null);
   // Add state for visible quadrants
   const [visibleQuadrants, setVisibleQuadrants] = useState<QuadrantType[]>([
     "red",
@@ -195,6 +198,13 @@ const MoodMeter = ({ user }: MoodMeterProps) => {
     }, 0);
   };
 
+  const handleFeelingHover = useCallback((feeling: Feeling | null) => {
+    // Update the ref first
+    currentHoveredFeelingRef.current = feeling?.name || null;
+    // Don't reset zoom when hovering
+    setHoveredFeeling(feeling);
+  }, []);
+
   const handleQuadrantHover = (quadrant: QuadrantType | null) => {
     setHoveredQuadrant(quadrant);
   };
@@ -224,7 +234,8 @@ const MoodMeter = ({ user }: MoodMeterProps) => {
     });
   };
 
-  const getQuadrantColors = (quadrant: QuadrantType) => {
+  // Memoize the quadrant colors to avoid recalculation
+  const getQuadrantColors = useCallback((quadrant: QuadrantType) => {
     const colors = {
       red: {
         bg: "bg-red-900/30",
@@ -273,152 +284,88 @@ const MoodMeter = ({ user }: MoodMeterProps) => {
     };
 
     return colors[quadrant];
-  };
-
-  const handleSubmit = async () => {
-    if (!selectedQuadrant || !selectedFeeling) return;
-
-    try {
-      setIsSubmitting(true);
-
-      await logMood({
-        userId: user.$id,
-        quadrant: selectedQuadrant,
-        feeling: selectedFeeling,
-        note,
-      });
-
-      setSuccess(true);
-
-      // Reset form after 2 seconds
-      setTimeout(() => {
-        resetSelection();
-        setNote("");
-        setSuccess(false);
-      }, 2000);
-    } catch (error) {
-      console.error("Error logging mood:", error);
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
-  // Animation variants for the bubbles
-  const bubbleVariants = {
-    initial: { scale: 0.8, opacity: 0.7 },
-    hover: {
-      scale: 1.05,
-      opacity: 1,
-      transition: {
-        type: "spring",
-        stiffness: 300,
-        damping: 10,
-      },
-    },
-    tap: { scale: 0.95 },
-    selected: {
-      scale: 1.1,
-      opacity: 1,
-      transition: {
-        type: "spring",
-        stiffness: 300,
-        damping: 15,
-      },
-    },
-  };
-
-  // Animation for the floating effect
-  const floatingAnimation = {
-    y: [0, -10, 0],
-    transition: {
-      duration: 3,
-      repeat: Infinity,
-      repeatType: "reverse" as const,
-      ease: "easeInOut",
-    },
-  };
+  }, []);
 
   // Prepare data for Chart.js - memoized for performance
   const prepareChartData = useMemo(() => {
-    // Group feelings by quadrant
-    const redFeelings = allFeelings.filter((f) => f.quadrant === "red");
-    const blueFeelings = allFeelings.filter((f) => f.quadrant === "blue");
-    const greenFeelings = allFeelings.filter((f) => f.quadrant === "green");
-    const yellowFeelings = allFeelings.filter((f) => f.quadrant === "yellow");
+    // Group feelings by quadrant - only do this once
+    const feelingsByQuadrant = {
+      red: allFeelings.filter((f) => f.quadrant === "red"),
+      blue: allFeelings.filter((f) => f.quadrant === "blue"),
+      green: allFeelings.filter((f) => f.quadrant === "green"),
+      yellow: allFeelings.filter((f) => f.quadrant === "yellow"),
+    };
 
+    // Create dataset configuration
+    const createDataset = (quadrant: QuadrantType, feelings: Feeling[]) => ({
+      label: `${quadrant.charAt(0).toUpperCase() + quadrant.slice(1)} Quadrant`,
+      data: feelings.map((f) => ({
+        x: f.valence,
+        y: f.arousal,
+        feeling: f,
+      })),
+      backgroundColor: getQuadrantColors(quadrant).rgb,
+      borderColor: getQuadrantColors(quadrant).fill,
+      borderWidth: 1,
+      pointRadius: selectedFeeling
+        ? (point: any) => (point.raw.feeling.name === selectedFeeling ? 12 : 8)
+        : 8,
+      pointHoverRadius: 12,
+      hidden: !visibleQuadrants.includes(quadrant),
+    });
+
+    // Create datasets for each quadrant
     return {
       datasets: [
-        {
-          label: "Red Quadrant",
-          data: redFeelings.map((f) => ({
-            x: f.valence,
-            y: f.arousal,
-            feeling: f,
-          })),
-          backgroundColor: "rgba(239, 68, 68, 0.7)",
-          borderColor: "rgba(239, 68, 68, 1)",
-          borderWidth: 1,
-          pointRadius: selectedFeeling
-            ? (point: any) =>
-                point.raw.feeling.name === selectedFeeling ? 12 : 8
-            : 8,
-          pointHoverRadius: 12,
-          hidden: !visibleQuadrants.includes("red"),
-        },
-        {
-          label: "Blue Quadrant",
-          data: blueFeelings.map((f) => ({
-            x: f.valence,
-            y: f.arousal,
-            feeling: f,
-          })),
-          backgroundColor: "rgba(59, 130, 246, 0.7)",
-          borderColor: "rgba(59, 130, 246, 1)",
-          borderWidth: 1,
-          pointRadius: selectedFeeling
-            ? (point: any) =>
-                point.raw.feeling.name === selectedFeeling ? 12 : 8
-            : 8,
-          pointHoverRadius: 12,
-          hidden: !visibleQuadrants.includes("blue"),
-        },
-        {
-          label: "Green Quadrant",
-          data: greenFeelings.map((f) => ({
-            x: f.valence,
-            y: f.arousal,
-            feeling: f,
-          })),
-          backgroundColor: "rgba(34, 197, 94, 0.7)",
-          borderColor: "rgba(34, 197, 94, 1)",
-          borderWidth: 1,
-          pointRadius: selectedFeeling
-            ? (point: any) =>
-                point.raw.feeling.name === selectedFeeling ? 12 : 8
-            : 8,
-          pointHoverRadius: 12,
-          hidden: !visibleQuadrants.includes("green"),
-        },
-        {
-          label: "Yellow Quadrant",
-          data: yellowFeelings.map((f) => ({
-            x: f.valence,
-            y: f.arousal,
-            feeling: f,
-          })),
-          backgroundColor: "rgba(234, 179, 8, 0.7)",
-          borderColor: "rgba(234, 179, 8, 1)",
-          borderWidth: 1,
-          pointRadius: selectedFeeling
-            ? (point: any) =>
-                point.raw.feeling.name === selectedFeeling ? 12 : 8
-            : 8,
-          pointHoverRadius: 12,
-          hidden: !visibleQuadrants.includes("yellow"),
-        },
+        createDataset("red", feelingsByQuadrant.red),
+        createDataset("blue", feelingsByQuadrant.blue),
+        createDataset("green", feelingsByQuadrant.green),
+        createDataset("yellow", feelingsByQuadrant.yellow),
       ],
     };
-  }, [allFeelings, selectedFeeling, visibleQuadrants]);
+  }, [allFeelings, selectedFeeling, visibleQuadrants, getQuadrantColors]);
+
+  // Feeling information display - prioritize selected feeling over hovered feeling
+  const displayFeeling = useMemo(() => {
+    return selectedFeelingData || hoveredFeeling;
+  }, [selectedFeelingData, hoveredFeeling]);
+
+  // Create a separate hover handler to avoid infinite loops
+  const handleChartHover = useCallback(
+    (event: any, elements: any[]) => {
+      const chartCanvas = document.getElementById(
+        "mood-chart"
+      ) as HTMLCanvasElement;
+      if (chartCanvas) {
+        chartCanvas.style.cursor =
+          elements && elements.length > 0 ? "pointer" : "default";
+      }
+
+      // Handle hover to show feeling info
+      if (elements && elements.length > 0) {
+        const element = elements[0];
+        const datasetIndex = element.datasetIndex;
+        const index = element.index;
+
+        const datasets = chartRef.current?.data.datasets;
+        if (datasets && datasets[datasetIndex]) {
+          const dataPoint = datasets[datasetIndex].data[index] as any;
+          if (dataPoint && dataPoint.feeling) {
+            // Store the feeling name to check if it's different
+            const feelingName = dataPoint.feeling.name;
+            // Only update if it's a different feeling from what's in the ref
+            if (currentHoveredFeelingRef.current !== feelingName) {
+              handleFeelingHover(dataPoint.feeling);
+            }
+          }
+        }
+      } else if (currentHoveredFeelingRef.current !== null) {
+        // Only clear if there's currently a hovered feeling in the ref
+        handleFeelingHover(null);
+      }
+    },
+    [handleFeelingHover]
+  );
 
   // Chart.js options - memoized for performance
   const chartOptions: ChartOptions<"scatter"> = useMemo(
@@ -465,40 +412,10 @@ const MoodMeter = ({ user }: MoodMeterProps) => {
       },
       plugins: {
         tooltip: {
-          callbacks: {
-            label: (context) => {
-              const feeling = context.raw as any;
-              return [
-                `${feeling.feeling.name}`,
-                `Definition: ${feeling.feeling.definition}`,
-                `Valence: ${feeling.x.toFixed(2)}`,
-                `Arousal: ${feeling.y.toFixed(2)}`,
-              ];
-            },
-          },
-          backgroundColor: "rgba(0, 0, 0, 0.8)",
-          padding: 12,
-          titleFont: {
-            size: 14,
-          },
-          bodyFont: {
-            size: 13,
-          },
+          enabled: false, // Disable tooltips
         },
         legend: {
-          display: true,
-          position: "top",
-          labels: {
-            color: "rgba(255, 255, 255, 0.7)",
-            font: {
-              size: 12,
-            },
-            boxWidth: 12,
-          },
-          onClick: (evt, item, legend) => {
-            // Prevent default legend click behavior
-            // We'll handle visibility with our own checkboxes
-          },
+          display: false,
         },
       },
       onClick: (event, elements) => {
@@ -512,20 +429,13 @@ const MoodMeter = ({ user }: MoodMeterProps) => {
             const dataPoint = datasets[datasetIndex].data[index] as any;
             if (dataPoint && dataPoint.feeling) {
               handleFeelingSelect(dataPoint.feeling);
+              // Clear hovered feeling when selecting to avoid conflicts
+              handleFeelingHover(null);
             }
           }
         }
       },
-      onHover: (event, elements) => {
-        const chartCanvas = document.getElementById(
-          "mood-chart"
-        ) as HTMLCanvasElement;
-        if (chartCanvas) {
-          chartCanvas.style.cursor =
-            elements && elements.length > 0 ? "pointer" : "default";
-        }
-      },
-      // Disable all animations to prevent zoom issues
+      onHover: handleChartHover,
       animation: false,
       animations: {
         colors: false,
@@ -540,11 +450,11 @@ const MoodMeter = ({ user }: MoodMeterProps) => {
         },
       },
     }),
-    []
+    [handleChartHover] // Only depend on the memoized hover handler
   );
 
   // Function to determine zoom level based on visible quadrants
-  const getZoomBounds = () => {
+  const getZoomBounds = useCallback(() => {
     // Default to full view
     let xMin = -1,
       xMax = 1,
@@ -582,6 +492,7 @@ const MoodMeter = ({ user }: MoodMeterProps) => {
       }
     } else if (isZoomed && visibleQuadrants.length > 1) {
       // Custom zoom calculations for multiple quadrants
+      // For now, just show the full view when multiple quadrants are visible
       xMin = -1;
       xMax = 1;
       yMin = -1;
@@ -589,7 +500,7 @@ const MoodMeter = ({ user }: MoodMeterProps) => {
     }
 
     return { xMin, xMax, yMin, yMax };
-  };
+  }, [isZoomed, visibleQuadrants]);
 
   // Apply zoom when quadrant selection or visibility changes
   useEffect(() => {
@@ -614,9 +525,35 @@ const MoodMeter = ({ user }: MoodMeterProps) => {
 
     // Immediate update
     chart.update("resize");
-  }, [visibleQuadrants, isZoomed]);
+  }, [visibleQuadrants, isZoomed, getZoomBounds]);
 
-  // Quadrant labels for the chart
+  // Prevent zoom from being affected by hover events
+  useEffect(() => {
+    // This effect only runs when hoveredFeeling changes
+    // We need to ensure zoom is maintained
+    if (!chartRef.current || !isZoomed) return;
+
+    const chart = chartRef.current;
+    const { xMin, xMax, yMin, yMax } = getZoomBounds();
+
+    // Re-apply the zoom settings when hover state changes
+    chart.options.scales = {
+      x: {
+        ...chart.options.scales?.x,
+        min: xMin,
+        max: xMax,
+      },
+      y: {
+        ...chart.options.scales?.y,
+        min: yMin,
+        max: yMax,
+      },
+    };
+
+    chart.update("resize");
+  }, [hoveredFeeling, getZoomBounds, isZoomed]);
+
+  // Quadrant labels for the chart - memoized for performance
   const quadrantLabels = useMemo(
     () => [
       {
@@ -707,6 +644,69 @@ const MoodMeter = ({ user }: MoodMeterProps) => {
       unregisterPlugin();
     };
   }, [quadrantLabels, isZoomed]);
+
+  const handleSubmit = async () => {
+    if (!selectedQuadrant || !selectedFeeling) return;
+
+    try {
+      setIsSubmitting(true);
+
+      await logMood({
+        userId: user.$id,
+        quadrant: selectedQuadrant,
+        feeling: selectedFeeling,
+        note,
+      });
+
+      setSuccess(true);
+
+      // Reset form after 2 seconds
+      setTimeout(() => {
+        resetSelection();
+        setNote("");
+        setSuccess(false);
+      }, 2000);
+    } catch (error) {
+      console.error("Error logging mood:", error);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  // Animation variants for the bubbles
+  const bubbleVariants = {
+    initial: { scale: 0.8, opacity: 0.7 },
+    hover: {
+      scale: 1.05,
+      opacity: 1,
+      transition: {
+        type: "spring",
+        stiffness: 300,
+        damping: 10,
+      },
+    },
+    tap: { scale: 0.95 },
+    selected: {
+      scale: 1.1,
+      opacity: 1,
+      transition: {
+        type: "spring",
+        stiffness: 300,
+        damping: 15,
+      },
+    },
+  };
+
+  // Animation for the floating effect
+  const floatingAnimation = {
+    y: [0, -10, 0],
+    transition: {
+      duration: 3,
+      repeat: Infinity,
+      repeatType: "reverse" as const,
+      ease: "easeInOut",
+    },
+  };
 
   return (
     <div className="w-full min-h-screen bg-gray-900 text-gray-100 p-6 flex flex-col items-center">
@@ -898,76 +898,89 @@ const MoodMeter = ({ user }: MoodMeterProps) => {
                   />
                 </div>
 
-                {selectedFeeling && selectedFeelingData && (
+                {/* Feeling information box - shown on hover or selection */}
+                {displayFeeling ? (
                   <motion.div
                     className="w-full mb-8"
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 0.3 }}
+                    transition={{
+                      duration: 0.2,
+                      type: "spring",
+                      stiffness: 500,
+                      damping: 30,
+                    }}
+                    key={displayFeeling.name} // Add key to force re-render on feeling change
                   >
                     <div
                       className={`p-6 rounded-xl ${
                         getQuadrantColors(
-                          selectedFeelingData.quadrant as QuadrantType
+                          displayFeeling.quadrant as QuadrantType
                         ).bg
                       } backdrop-blur-sm border border-gray-700 shadow-lg ${
                         getQuadrantColors(
-                          selectedFeelingData.quadrant as QuadrantType
+                          displayFeeling.quadrant as QuadrantType
                         ).shadow
                       }`}
                     >
                       <h3
                         className={`text-xl font-semibold capitalize mb-2 ${
                           getQuadrantColors(
-                            selectedFeelingData.quadrant as QuadrantType
+                            displayFeeling.quadrant as QuadrantType
                           ).text
                         }`}
                       >
-                        {selectedFeeling}
+                        {displayFeeling.name}
                       </h3>
                       <p className="text-gray-300 mb-4">
-                        {selectedFeelingData.definition}
+                        {displayFeeling.definition}
                       </p>
                       <div className="flex justify-between text-sm text-gray-400 mb-4">
                         <span>
-                          Valence: {selectedFeelingData.valence.toFixed(2)}
+                          Valence: {displayFeeling.valence.toFixed(2)}
                         </span>
                         <span>
-                          Arousal: {selectedFeelingData.arousal.toFixed(2)}
+                          Arousal: {displayFeeling.arousal.toFixed(2)}
                         </span>
                       </div>
 
-                      <div className="mb-4">
-                        <label
-                          htmlFor="note"
-                          className="block text-sm font-medium text-gray-300 mb-2"
-                        >
-                          Add a note (optional)
-                        </label>
-                        <textarea
-                          id="note"
-                          value={note}
-                          onChange={(e) => setNote(e.target.value)}
-                          className="w-full p-3 bg-gray-800 border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-200"
-                          rows={3}
-                          placeholder="What made you feel this way? Any additional thoughts?"
-                        />
-                      </div>
+                      {selectedFeeling &&
+                        selectedFeelingData &&
+                        displayFeeling === selectedFeelingData && (
+                          <>
+                            <div className="mb-4">
+                              <label
+                                htmlFor="note"
+                                className="block text-sm font-medium text-gray-300 mb-2"
+                              >
+                                Add a note (optional)
+                              </label>
+                              <textarea
+                                id="note"
+                                value={note}
+                                onChange={(e) => setNote(e.target.value)}
+                                className="w-full p-3 bg-gray-800 border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-200"
+                                rows={3}
+                                placeholder="What made you feel this way? Any additional thoughts?"
+                              />
+                            </div>
 
-                      <button
-                        onClick={handleSubmit}
-                        disabled={isSubmitting}
-                        className={`w-full bg-gradient-to-r ${
-                          getQuadrantColors(
-                            selectedFeelingData.quadrant as QuadrantType
-                          ).gradient
-                        } text-white font-medium px-6 py-3 rounded-lg shadow-lg hover:opacity-90 transition-all duration-300`}
-                      >
-                        {isSubmitting ? "Logging..." : "Log Mood"}
-                      </button>
+                            <button
+                              onClick={handleSubmit}
+                              disabled={isSubmitting}
+                              className={`w-full bg-gradient-to-r ${
+                                getQuadrantColors(
+                                  selectedFeelingData.quadrant as QuadrantType
+                                ).gradient
+                              } text-white font-medium px-6 py-3 rounded-lg shadow-lg hover:opacity-90 transition-all duration-300`}
+                            >
+                              {isSubmitting ? "Logging..." : "Log Mood"}
+                            </button>
+                          </>
+                        )}
                     </div>
                   </motion.div>
-                )}
+                ) : null}
               </>
             )}
           </div>
