@@ -1,16 +1,49 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { logMood } from "@/lib/actions/mood.actions";
 import { MOOD_QUADRANTS } from "@/lib/constants/mood";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import Image from "next/image";
+import {
+  Chart as ChartJS,
+  LinearScale,
+  PointElement,
+  Tooltip,
+  Legend,
+  ChartOptions,
+  ChartType,
+  registerables,
+} from "chart.js";
+import { Scatter } from "react-chartjs-2";
+import { Chart } from "chart.js";
+
+// Register required Chart.js components
+ChartJS.register(LinearScale, PointElement, Tooltip, Legend, ...registerables);
+
+// Register a custom plugin type to TypeScript
+declare module "chart.js" {
+  interface PluginOptionsByType<TType extends ChartType> {
+    quadrantLabels?: {
+      fontSize?: number;
+      fontColor?: string;
+    };
+  }
+}
 
 type MoodMeterProps = {
   user: User;
 };
 
 type QuadrantType = "red" | "blue" | "green" | "yellow";
+
+type Feeling = {
+  name: string;
+  definition: string;
+  valence: number;
+  arousal: number;
+  quadrant?: QuadrantType;
+};
 
 // SVG paths for different blob shapes
 const blobPaths = [
@@ -20,11 +53,29 @@ const blobPaths = [
   "M60,-60 C83.5,-42 96,-21 96,0 C96,21 83.5,42 60,60 C36.5,78 18,87 0,87 C-18,87 -36.5,78 -60,60 C-83.5,42 -96,21 -96,0 C-96,-21 -83.5,-42 -60,-60 C-36.5,-78 -18,-87 0,-87 C18,-87 36.5,-78 60,-60",
 ];
 
+// Get all feelings from all quadrants - memoized for performance
+const getAllFeelings = () => {
+  const allFeelings: Feeling[] = [];
+
+  Object.entries(MOOD_QUADRANTS).forEach(([quadrant, data]) => {
+    data.feelings.forEach((feeling) => {
+      allFeelings.push({
+        ...feeling,
+        quadrant: quadrant as QuadrantType,
+      });
+    });
+  });
+
+  return allFeelings;
+};
+
 const MoodMeter = ({ user }: MoodMeterProps) => {
   const [selectedQuadrant, setSelectedQuadrant] = useState<QuadrantType | null>(
     null
   );
   const [selectedFeeling, setSelectedFeeling] = useState<string | null>(null);
+  const [selectedFeelingData, setSelectedFeelingData] =
+    useState<Feeling | null>(null);
   const [note, setNote] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [success, setSuccess] = useState(false);
@@ -32,7 +83,19 @@ const MoodMeter = ({ user }: MoodMeterProps) => {
   const [hoveredQuadrant, setHoveredQuadrant] = useState<QuadrantType | null>(
     null
   );
-  const [hoveredFeeling, setHoveredFeeling] = useState<string | null>(null);
+  const chartRef = useRef<ChartJS<"scatter">>(null);
+  // Add state for visible quadrants
+  const [visibleQuadrants, setVisibleQuadrants] = useState<QuadrantType[]>([
+    "red",
+    "blue",
+    "green",
+    "yellow",
+  ]);
+  // Add state to track if zoomed
+  const [isZoomed, setIsZoomed] = useState(false);
+
+  // Memoize feelings to avoid recalculation on each render
+  const allFeelings = useMemo(() => getAllFeelings(), []);
 
   // Change blob shape every 3 seconds
   useEffect(() => {
@@ -46,18 +109,45 @@ const MoodMeter = ({ user }: MoodMeterProps) => {
   const handleQuadrantSelect = (quadrant: QuadrantType) => {
     setSelectedQuadrant(quadrant);
     setSelectedFeeling(null);
+    setSelectedFeelingData(null);
+    // Initialize with only the selected quadrant visible
+    setVisibleQuadrants([quadrant]);
+    // Set zoomed state to true
+    setIsZoomed(true);
   };
 
-  const handleFeelingSelect = (feeling: string) => {
-    setSelectedFeeling(feeling);
+  const handleFeelingSelect = (feeling: Feeling) => {
+    setSelectedFeeling(feeling.name);
+    setSelectedFeelingData(feeling);
   };
 
   const handleQuadrantHover = (quadrant: QuadrantType | null) => {
     setHoveredQuadrant(quadrant);
   };
 
-  const handleFeelingHover = (feeling: string | null) => {
-    setHoveredFeeling(feeling);
+  const resetSelection = () => {
+    // Show all quadrants and reset zoom when going back
+    setVisibleQuadrants(["red", "blue", "green", "yellow"]);
+    setSelectedQuadrant(null);
+    setSelectedFeeling(null);
+    setSelectedFeelingData(null);
+    setIsZoomed(false);
+  };
+
+  // Toggle quadrant visibility
+  const toggleQuadrantVisibility = (quadrant: QuadrantType) => {
+    setVisibleQuadrants((prev) => {
+      if (prev.includes(quadrant)) {
+        if (prev.length > 1) {
+          // Only allow removing if at least one quadrant will remain visible
+          return prev.filter((q) => q !== quadrant);
+        }
+        return prev;
+      } else {
+        // When adding a new quadrant, maintain zoom level
+        return [...prev, quadrant];
+      }
+    });
   };
 
   const getQuadrantColors = (quadrant: QuadrantType) => {
@@ -71,6 +161,7 @@ const MoodMeter = ({ user }: MoodMeterProps) => {
         fill: "#ef4444",
         glow: "0 0 15px rgba(239, 68, 68, 0.7)",
         shadow: "shadow-red-500/30",
+        rgb: "rgba(239, 68, 68, 0.7)",
       },
       blue: {
         bg: "bg-blue-900/30",
@@ -81,6 +172,7 @@ const MoodMeter = ({ user }: MoodMeterProps) => {
         fill: "#3b82f6",
         glow: "0 0 15px rgba(59, 130, 246, 0.7)",
         shadow: "shadow-blue-500/30",
+        rgb: "rgba(59, 130, 246, 0.7)",
       },
       green: {
         bg: "bg-green-900/30",
@@ -91,6 +183,7 @@ const MoodMeter = ({ user }: MoodMeterProps) => {
         fill: "#22c55e",
         glow: "0 0 15px rgba(34, 197, 94, 0.7)",
         shadow: "shadow-green-500/30",
+        rgb: "rgba(34, 197, 94, 0.7)",
       },
       yellow: {
         bg: "bg-yellow-900/30",
@@ -101,6 +194,7 @@ const MoodMeter = ({ user }: MoodMeterProps) => {
         fill: "#eab308",
         glow: "0 0 15px rgba(234, 179, 8, 0.7)",
         shadow: "shadow-yellow-500/30",
+        rgb: "rgba(234, 179, 8, 0.7)",
       },
     };
 
@@ -124,8 +218,7 @@ const MoodMeter = ({ user }: MoodMeterProps) => {
 
       // Reset form after 2 seconds
       setTimeout(() => {
-        setSelectedQuadrant(null);
-        setSelectedFeeling(null);
+        resetSelection();
         setNote("");
         setSuccess(false);
       }, 2000);
@@ -134,16 +227,6 @@ const MoodMeter = ({ user }: MoodMeterProps) => {
     } finally {
       setIsSubmitting(false);
     }
-  };
-
-  const getCurrentFeelingDefinition = () => {
-    if (!selectedQuadrant || !selectedFeeling) return null;
-
-    const feeling = MOOD_QUADRANTS[selectedQuadrant].feelings.find(
-      (f) => f.name === selectedFeeling
-    );
-
-    return feeling?.definition;
   };
 
   // Animation variants for the bubbles
@@ -181,6 +264,384 @@ const MoodMeter = ({ user }: MoodMeterProps) => {
     },
   };
 
+  // Prepare data for Chart.js - memoized for performance
+  const prepareChartData = useMemo(() => {
+    // Group feelings by quadrant
+    const redFeelings = allFeelings.filter((f) => f.quadrant === "red");
+    const blueFeelings = allFeelings.filter((f) => f.quadrant === "blue");
+    const greenFeelings = allFeelings.filter((f) => f.quadrant === "green");
+    const yellowFeelings = allFeelings.filter((f) => f.quadrant === "yellow");
+
+    return {
+      datasets: [
+        {
+          label: "Red Quadrant",
+          data: redFeelings.map((f) => ({
+            x: f.valence,
+            y: f.arousal,
+            feeling: f,
+          })),
+          backgroundColor: "rgba(239, 68, 68, 0.7)",
+          borderColor: "rgba(239, 68, 68, 1)",
+          borderWidth: 1,
+          pointRadius: selectedFeeling
+            ? (point: any) =>
+                point.raw.feeling.name === selectedFeeling ? 12 : 8
+            : 8,
+          pointHoverRadius: 12,
+          hidden: !visibleQuadrants.includes("red"),
+        },
+        {
+          label: "Blue Quadrant",
+          data: blueFeelings.map((f) => ({
+            x: f.valence,
+            y: f.arousal,
+            feeling: f,
+          })),
+          backgroundColor: "rgba(59, 130, 246, 0.7)",
+          borderColor: "rgba(59, 130, 246, 1)",
+          borderWidth: 1,
+          pointRadius: selectedFeeling
+            ? (point: any) =>
+                point.raw.feeling.name === selectedFeeling ? 12 : 8
+            : 8,
+          pointHoverRadius: 12,
+          hidden: !visibleQuadrants.includes("blue"),
+        },
+        {
+          label: "Green Quadrant",
+          data: greenFeelings.map((f) => ({
+            x: f.valence,
+            y: f.arousal,
+            feeling: f,
+          })),
+          backgroundColor: "rgba(34, 197, 94, 0.7)",
+          borderColor: "rgba(34, 197, 94, 1)",
+          borderWidth: 1,
+          pointRadius: selectedFeeling
+            ? (point: any) =>
+                point.raw.feeling.name === selectedFeeling ? 12 : 8
+            : 8,
+          pointHoverRadius: 12,
+          hidden: !visibleQuadrants.includes("green"),
+        },
+        {
+          label: "Yellow Quadrant",
+          data: yellowFeelings.map((f) => ({
+            x: f.valence,
+            y: f.arousal,
+            feeling: f,
+          })),
+          backgroundColor: "rgba(234, 179, 8, 0.7)",
+          borderColor: "rgba(234, 179, 8, 1)",
+          borderWidth: 1,
+          pointRadius: selectedFeeling
+            ? (point: any) =>
+                point.raw.feeling.name === selectedFeeling ? 12 : 8
+            : 8,
+          pointHoverRadius: 12,
+          hidden: !visibleQuadrants.includes("yellow"),
+        },
+      ],
+    };
+  }, [allFeelings, selectedFeeling, visibleQuadrants]);
+
+  // Chart.js options - memoized for performance
+  const chartOptions: ChartOptions<"scatter"> = useMemo(
+    () => ({
+      responsive: true,
+      maintainAspectRatio: false,
+      scales: {
+        x: {
+          min: -1,
+          max: 1,
+          grid: {
+            color: "rgba(255, 255, 255, 0.1)",
+          },
+          ticks: {
+            color: "rgba(255, 255, 255, 0.7)",
+          },
+          title: {
+            display: true,
+            text: "Valence (Negative to Positive)",
+            color: "rgba(255, 255, 255, 0.7)",
+            font: {
+              size: 14,
+            },
+          },
+        },
+        y: {
+          min: -1,
+          max: 1,
+          grid: {
+            color: "rgba(255, 255, 255, 0.1)",
+          },
+          ticks: {
+            color: "rgba(255, 255, 255, 0.7)",
+          },
+          title: {
+            display: true,
+            text: "Arousal (Low to High)",
+            color: "rgba(255, 255, 255, 0.7)",
+            font: {
+              size: 14,
+            },
+          },
+        },
+      },
+      plugins: {
+        tooltip: {
+          callbacks: {
+            label: (context) => {
+              const feeling = context.raw as any;
+              return [
+                `${feeling.feeling.name}`,
+                `Definition: ${feeling.feeling.definition}`,
+                `Valence: ${feeling.x.toFixed(2)}`,
+                `Arousal: ${feeling.y.toFixed(2)}`,
+              ];
+            },
+          },
+          backgroundColor: "rgba(0, 0, 0, 0.8)",
+          padding: 12,
+          titleFont: {
+            size: 14,
+          },
+          bodyFont: {
+            size: 13,
+          },
+        },
+        legend: {
+          display: true,
+          position: "top",
+          labels: {
+            color: "rgba(255, 255, 255, 0.7)",
+            font: {
+              size: 12,
+            },
+            boxWidth: 12,
+          },
+          onClick: (evt, item, legend) => {
+            // Prevent default legend click behavior
+            // We'll handle visibility with our own checkboxes
+          },
+        },
+      },
+      onClick: (event, elements) => {
+        if (elements && elements.length > 0) {
+          const element = elements[0];
+          const datasetIndex = element.datasetIndex;
+          const index = element.index;
+
+          const datasets = chartRef.current?.data.datasets;
+          if (datasets && datasets[datasetIndex]) {
+            const dataPoint = datasets[datasetIndex].data[index] as any;
+            if (dataPoint && dataPoint.feeling) {
+              handleFeelingSelect(dataPoint.feeling);
+            }
+          }
+        }
+      },
+      onHover: (event, elements) => {
+        const chartCanvas = document.getElementById(
+          "mood-chart"
+        ) as HTMLCanvasElement;
+        if (chartCanvas) {
+          chartCanvas.style.cursor =
+            elements && elements.length > 0 ? "pointer" : "default";
+        }
+      },
+    }),
+    []
+  );
+
+  // Function to determine zoom level based on visible quadrants
+  const getZoomBounds = () => {
+    // Default to full view
+    let xMin = -1,
+      xMax = 1,
+      yMin = -1,
+      yMax = 1;
+
+    // If zoomed and only one quadrant is visible, zoom to that quadrant
+    if (isZoomed && visibleQuadrants.length === 1) {
+      const quadrant = visibleQuadrants[0];
+      switch (quadrant) {
+        case "blue": // Left-bottom (negative valence, negative arousal)
+          xMin = -1;
+          xMax = 0;
+          yMin = -1;
+          yMax = 0;
+          break;
+        case "green": // Right-bottom (positive valence, negative arousal)
+          xMin = 0;
+          xMax = 1;
+          yMin = -1;
+          yMax = 0;
+          break;
+        case "red": // Left-top (negative valence, positive arousal)
+          xMin = -1;
+          xMax = 0;
+          yMin = 0;
+          yMax = 1;
+          break;
+        case "yellow": // Right-top (positive valence, positive arousal)
+          xMin = 0;
+          xMax = 1;
+          yMin = 0;
+          yMax = 1;
+          break;
+      }
+    } else if (isZoomed && visibleQuadrants.length > 1) {
+      // Custom zoom calculations for multiple quadrants
+      const hasRed = visibleQuadrants.includes("red");
+      const hasYellow = visibleQuadrants.includes("yellow");
+      const hasBlue = visibleQuadrants.includes("blue");
+      const hasGreen = visibleQuadrants.includes("green");
+
+      // Determine x-axis bounds
+      if ((hasRed || hasBlue) && !(hasYellow || hasGreen)) {
+        // Only left quadrants
+        xMin = -1;
+        xMax = 0;
+      } else if ((hasYellow || hasGreen) && !(hasRed || hasBlue)) {
+        // Only right quadrants
+        xMin = 0;
+        xMax = 1;
+      } else {
+        // Both left and right
+        xMin = -1;
+        xMax = 1;
+      }
+
+      // Determine y-axis bounds
+      if ((hasRed || hasYellow) && !(hasBlue || hasGreen)) {
+        // Only top quadrants
+        yMin = 0;
+        yMax = 1;
+      } else if ((hasBlue || hasGreen) && !(hasRed || hasYellow)) {
+        // Only bottom quadrants
+        yMin = -1;
+        yMax = 0;
+      } else {
+        // Both top and bottom
+        yMin = -1;
+        yMax = 1;
+      }
+    }
+
+    return { xMin, xMax, yMin, yMax };
+  };
+
+  // Apply zoom when quadrant selection or visibility changes
+  useEffect(() => {
+    if (!chartRef.current) return;
+
+    const chart = chartRef.current;
+    const { xMin, xMax, yMin, yMax } = getZoomBounds();
+
+    // Apply the zoom settings
+    chart.options.scales!.x!.min = xMin;
+    chart.options.scales!.x!.max = xMax;
+    chart.options.scales!.y!.min = yMin;
+    chart.options.scales!.y!.max = yMax;
+
+    // Update the chart with the new settings (use 'none' to prevent animations that might trigger resets)
+    chart.update("none");
+  }, [selectedQuadrant, visibleQuadrants, isZoomed]);
+
+  // Quadrant labels for the chart
+  const quadrantLabels = useMemo(
+    () => [
+      {
+        text: "RED: High Arousal, Negative Valence",
+        x: -0.5,
+        y: 0.9,
+        color: "rgba(239, 68, 68, 0.9)",
+      },
+      {
+        text: "YELLOW: High Arousal, Positive Valence",
+        x: 0.5,
+        y: 0.9,
+        color: "rgba(234, 179, 8, 0.9)",
+      },
+      {
+        text: "BLUE: Low Arousal, Negative Valence",
+        x: -0.5,
+        y: -0.9,
+        color: "rgba(59, 130, 246, 0.9)",
+      },
+      {
+        text: "GREEN: Low Arousal, Positive Valence",
+        x: 0.5,
+        y: -0.9,
+        color: "rgba(34, 197, 94, 0.9)",
+      },
+    ],
+    []
+  );
+
+  // Setup quadrant label plugin
+  useEffect(() => {
+    const quadrantLabelsPlugin = {
+      id: "quadrantLabels",
+      afterDraw: (chart: any) => {
+        // Only draw these when not zoomed in
+        if (!isZoomed) {
+          const ctx = chart.ctx;
+          const xAxis = chart.scales.x;
+          const yAxis = chart.scales.y;
+
+          ctx.save();
+          ctx.font = "12px Arial";
+          ctx.textAlign = "center";
+
+          quadrantLabels.forEach((label: any) => {
+            const x = xAxis.getPixelForValue(label.x);
+            const y = yAxis.getPixelForValue(label.y);
+
+            ctx.fillStyle = label.color;
+            ctx.fillText(label.text, x, y);
+          });
+
+          // Draw quadrant lines
+          ctx.beginPath();
+          ctx.strokeStyle = "rgba(255, 255, 255, 0.3)";
+          ctx.lineWidth = 1;
+
+          // Vertical line at x=0
+          ctx.moveTo(xAxis.getPixelForValue(0), yAxis.getPixelForValue(-1));
+          ctx.lineTo(xAxis.getPixelForValue(0), yAxis.getPixelForValue(1));
+
+          // Horizontal line at y=0
+          ctx.moveTo(xAxis.getPixelForValue(-1), yAxis.getPixelForValue(0));
+          ctx.lineTo(xAxis.getPixelForValue(1), yAxis.getPixelForValue(0));
+
+          ctx.stroke();
+          ctx.restore();
+        }
+      },
+    };
+
+    // Register the plugin only once
+    const registerPlugin = async () => {
+      await import("chart.js").then(({ Chart }) => {
+        Chart.register(quadrantLabelsPlugin);
+      });
+    };
+
+    const unregisterPlugin = async () => {
+      await import("chart.js").then(({ Chart }) => {
+        Chart.unregister(quadrantLabelsPlugin);
+      });
+    };
+
+    registerPlugin();
+    return () => {
+      unregisterPlugin();
+    };
+  }, [quadrantLabels, isZoomed]);
+
   return (
     <div className="w-full min-h-screen bg-gray-900 text-gray-100 p-6 flex flex-col items-center">
       <div className="relative z-10 w-full max-w-4xl">
@@ -205,90 +666,91 @@ const MoodMeter = ({ user }: MoodMeterProps) => {
             <h2 className="text-2xl font-bold mb-4 text-center bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-purple-500">
               How are you feeling right now?
             </h2>
-            <p className="text-gray-400 mb-8 text-center max-w-lg">
-              Select a quadrant that best matches your current energy and
-              pleasantness level
-            </p>
-
             {!selectedQuadrant ? (
-              <div className="grid grid-cols-2 gap-8 max-w-3xl mx-auto mb-8">
-                {Object.entries(MOOD_QUADRANTS).map(([key, quadrant]) => {
-                  const quadrantKey = key as QuadrantType;
-                  const colors = getQuadrantColors(quadrantKey);
-                  const isHovered = hoveredQuadrant === quadrantKey;
-                  const path = blobPaths[blobIndex];
+              <>
+                <p className="text-gray-400 mb-8 text-center max-w-lg">
+                  Select a quadrant to explore feelings
+                </p>
 
-                  return (
-                    <motion.div
-                      key={key}
-                      className="relative flex items-center justify-center"
-                      animate={floatingAnimation}
-                      onHoverStart={() => handleQuadrantHover(quadrantKey)}
-                      onHoverEnd={() => handleQuadrantHover(null)}
-                      onClick={() => handleQuadrantSelect(quadrantKey)}
-                    >
-                      <motion.div
-                        className="absolute inset-0 bg-gradient-to-br opacity-70 rounded-full filter blur-md"
-                        style={{
-                          background: `radial-gradient(circle, ${colors.fill}40 0%, ${colors.fill}00 70%)`,
-                        }}
-                        initial={{ scale: 0.9 }}
-                        animate={{
-                          scale: isHovered ? 1.1 : 1,
-                          opacity: isHovered ? 0.9 : 0.7,
-                        }}
-                        transition={{ duration: 0.3 }}
-                      />
+                <div className="grid grid-cols-2 gap-8 max-w-3xl mx-auto mb-6">
+                  {Object.entries(MOOD_QUADRANTS).map(([key, quadrant]) => {
+                    const quadrantKey = key as QuadrantType;
+                    const colors = getQuadrantColors(quadrantKey);
+                    const isHovered = hoveredQuadrant === quadrantKey;
+                    const path = blobPaths[blobIndex];
 
+                    return (
                       <motion.div
-                        className="relative cursor-pointer w-48 h-48 flex flex-col items-center justify-center p-6 backdrop-blur-sm"
-                        variants={bubbleVariants}
-                        initial="initial"
-                        whileHover="hover"
-                        whileTap="tap"
-                        animate={isHovered ? "hover" : "initial"}
+                        key={key}
+                        className="relative flex items-center justify-center"
+                        animate={floatingAnimation}
+                        onHoverStart={() => handleQuadrantHover(quadrantKey)}
+                        onHoverEnd={() => handleQuadrantHover(null)}
+                        onClick={() => handleQuadrantSelect(quadrantKey)}
                       >
-                        <svg
-                          width="100%"
-                          height="100%"
-                          viewBox="0 0 200 200"
-                          className="absolute inset-0"
+                        <motion.div
+                          className="absolute inset-0 bg-gradient-to-br opacity-70 rounded-full filter blur-md"
                           style={{
-                            filter: isHovered
-                              ? `drop-shadow(0 0 10px ${colors.fill})`
-                              : "none",
+                            background: `radial-gradient(circle, ${colors.fill}40 0%, ${colors.fill}00 70%)`,
                           }}
-                        >
-                          <motion.path
-                            d={path}
-                            fill={colors.fill}
-                            initial={{ opacity: 0.7 }}
-                            animate={{
-                              opacity: isHovered ? 0.9 : 0.7,
-                              scale: isHovered ? 1.05 : 1,
-                            }}
-                            transition={{ duration: 0.3 }}
-                          />
-                        </svg>
+                          initial={{ scale: 0.9 }}
+                          animate={{
+                            scale: isHovered ? 1.1 : 1,
+                            opacity: isHovered ? 0.9 : 0.7,
+                          }}
+                          transition={{ duration: 0.3 }}
+                        />
 
-                        <h3
-                          className={`${colors.text} text-xl font-bold mb-2 z-10`}
+                        <motion.div
+                          className="relative cursor-pointer w-48 h-48 flex flex-col items-center justify-center p-6 backdrop-blur-sm"
+                          variants={bubbleVariants}
+                          initial="initial"
+                          whileHover="hover"
+                          whileTap="tap"
+                          animate={isHovered ? "hover" : "initial"}
                         >
-                          {quadrant.name}
-                        </h3>
-                        <p className="text-white text-center text-sm z-10">
-                          {quadrant.description}
-                        </p>
+                          <svg
+                            width="100%"
+                            height="100%"
+                            viewBox="0 0 200 200"
+                            className="absolute inset-0"
+                            style={{
+                              filter: isHovered
+                                ? `drop-shadow(0 0 10px ${colors.fill})`
+                                : "none",
+                            }}
+                          >
+                            <motion.path
+                              d={path}
+                              fill={colors.fill}
+                              initial={{ opacity: 0.7 }}
+                              animate={{
+                                opacity: isHovered ? 0.9 : 0.7,
+                                scale: isHovered ? 1.05 : 1,
+                              }}
+                              transition={{ duration: 0.3 }}
+                            />
+                          </svg>
+
+                          <h3
+                            className={`${colors.text} text-xl font-bold mb-2 z-10`}
+                          >
+                            {quadrant.name}
+                          </h3>
+                          <p className="text-white text-center text-sm z-10">
+                            {quadrant.description}
+                          </p>
+                        </motion.div>
                       </motion.div>
-                    </motion.div>
-                  );
-                })}
-              </div>
+                    );
+                  })}
+                </div>
+              </>
             ) : (
-              <div className="w-full max-w-3xl">
-                <div className="flex items-center mb-6">
+              <>
+                <div className="w-full mb-4 flex justify-between items-center">
                   <button
-                    onClick={() => setSelectedQuadrant(null)}
+                    onClick={resetSelection}
                     className="text-gray-400 hover:text-white flex items-center gap-2 transition-colors"
                   >
                     <svg
@@ -303,95 +765,74 @@ const MoodMeter = ({ user }: MoodMeterProps) => {
                         clipRule="evenodd"
                       />
                     </svg>
-                    Back to quadrants
+                    Back to all quadrants
                   </button>
+                  <h3
+                    className={`text-xl font-bold ${
+                      getQuadrantColors(selectedQuadrant).text
+                    }`}
+                  >
+                    {MOOD_QUADRANTS[selectedQuadrant].name} Feelings
+                  </h3>
                 </div>
 
-                <h3
-                  className={`text-xl font-bold mb-4 ${
-                    getQuadrantColors(selectedQuadrant).text
-                  }`}
-                >
-                  {MOOD_QUADRANTS[selectedQuadrant].name} Feelings
-                </h3>
+                {/* Quadrant Visibility Controls */}
+                <div className="w-full mb-4 flex flex-wrap gap-3 items-center justify-center">
+                  <div className="text-sm text-gray-400 mr-2">
+                    Show quadrants:
+                  </div>
+                  {(["red", "blue", "green", "yellow"] as QuadrantType[]).map(
+                    (quadrant) => {
+                      const colors = getQuadrantColors(quadrant);
+                      const isVisible = visibleQuadrants.includes(quadrant);
 
-                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-4 mb-8">
-                  {MOOD_QUADRANTS[selectedQuadrant].feelings.map((feeling) => {
-                    const colors = getQuadrantColors(selectedQuadrant);
-                    const isSelected = feeling.name === selectedFeeling;
-                    const isHovered = hoveredFeeling === feeling.name;
-                    const path = blobPaths[blobIndex];
-
-                    return (
-                      <motion.div
-                        key={feeling.name}
-                        className="relative flex items-center justify-center"
-                        animate={floatingAnimation}
-                        onHoverStart={() => handleFeelingHover(feeling.name)}
-                        onHoverEnd={() => handleFeelingHover(null)}
-                        onClick={() => handleFeelingSelect(feeling.name)}
-                      >
-                        <motion.div
-                          className="absolute inset-0 bg-gradient-to-br opacity-70 rounded-full filter blur-md"
-                          style={{
-                            background: `radial-gradient(circle, ${colors.fill}40 0%, ${colors.fill}00 70%)`,
-                          }}
-                          initial={{ scale: 0.9 }}
-                          animate={{
-                            scale: isSelected || isHovered ? 1.1 : 1,
-                            opacity: isSelected || isHovered ? 0.9 : 0.7,
-                          }}
-                          transition={{ duration: 0.3 }}
-                        />
-
-                        <motion.div
-                          className="relative cursor-pointer w-24 h-24 flex items-center justify-center p-2 backdrop-blur-sm"
-                          variants={bubbleVariants}
-                          initial="initial"
-                          whileHover="hover"
-                          whileTap="tap"
-                          animate={
-                            isSelected
-                              ? "selected"
-                              : isHovered
-                              ? "hover"
-                              : "initial"
-                          }
+                      return (
+                        <label
+                          key={quadrant}
+                          className={`flex items-center space-x-2 px-3 py-1.5 rounded-full cursor-pointer transition-colors
+                          ${isVisible ? colors.bg : "bg-gray-800/30"} 
+                          hover:bg-opacity-80`}
                         >
-                          <svg
-                            width="100%"
-                            height="100%"
-                            viewBox="0 0 200 200"
-                            className="absolute inset-0"
+                          <input
+                            type="checkbox"
+                            checked={isVisible}
+                            onChange={() => toggleQuadrantVisibility(quadrant)}
+                            className="hidden"
+                          />
+                          <div
+                            className={`w-3 h-3 rounded-full ${
+                              isVisible ? `bg-${quadrant}-500` : "bg-gray-600"
+                            }`}
                             style={{
-                              filter:
-                                isSelected || isHovered
-                                  ? `drop-shadow(0 0 8px ${colors.fill})`
-                                  : "none",
+                              backgroundColor: isVisible
+                                ? colors.fill
+                                : "#4B5563",
                             }}
+                          />
+                          <span
+                            className={`text-sm ${
+                              isVisible ? colors.text : "text-gray-500"
+                            }`}
                           >
-                            <motion.path
-                              d={path}
-                              fill={colors.fill}
-                              initial={{ opacity: 0.7 }}
-                              animate={{
-                                opacity: isSelected ? 1 : isHovered ? 0.9 : 0.7,
-                                scale: isSelected ? 1.05 : isHovered ? 1.02 : 1,
-                              }}
-                              transition={{ duration: 0.3 }}
-                            />
-                          </svg>
-
-                          <span className="text-white font-medium text-center z-10 capitalize">
-                            {feeling.name}
+                            {MOOD_QUADRANTS[quadrant].name}
                           </span>
-                        </motion.div>
-                      </motion.div>
-                    );
-                  })}
+                        </label>
+                      );
+                    }
+                  )}
                 </div>
 
-                {selectedFeeling && (
+                {/* Chart.js Feeling Plot - Only show when a quadrant is selected */}
+                <div className="w-full h-[500px] bg-gray-800/50 rounded-xl mb-8 overflow-hidden border border-gray-700 backdrop-blur-sm p-4">
+                  <Scatter
+                    id="mood-chart"
+                    ref={chartRef}
+                    data={prepareChartData}
+                    options={chartOptions}
+                  />
+                </div>
+
+                {selectedFeeling && selectedFeelingData && (
                   <motion.div
                     className="w-full mb-8"
                     initial={{ opacity: 0, y: 20 }}
@@ -400,21 +841,35 @@ const MoodMeter = ({ user }: MoodMeterProps) => {
                   >
                     <div
                       className={`p-6 rounded-xl ${
-                        getQuadrantColors(selectedQuadrant).bg
+                        getQuadrantColors(
+                          selectedFeelingData.quadrant as QuadrantType
+                        ).bg
                       } backdrop-blur-sm border border-gray-700 shadow-lg ${
-                        getQuadrantColors(selectedQuadrant).shadow
+                        getQuadrantColors(
+                          selectedFeelingData.quadrant as QuadrantType
+                        ).shadow
                       }`}
                     >
                       <h3
                         className={`text-xl font-semibold capitalize mb-2 ${
-                          getQuadrantColors(selectedQuadrant).text
+                          getQuadrantColors(
+                            selectedFeelingData.quadrant as QuadrantType
+                          ).text
                         }`}
                       >
                         {selectedFeeling}
                       </h3>
                       <p className="text-gray-300 mb-4">
-                        {getCurrentFeelingDefinition()}
+                        {selectedFeelingData.definition}
                       </p>
+                      <div className="flex justify-between text-sm text-gray-400 mb-4">
+                        <span>
+                          Valence: {selectedFeelingData.valence.toFixed(2)}
+                        </span>
+                        <span>
+                          Arousal: {selectedFeelingData.arousal.toFixed(2)}
+                        </span>
+                      </div>
 
                       <div className="mb-4">
                         <label
@@ -437,7 +892,9 @@ const MoodMeter = ({ user }: MoodMeterProps) => {
                         onClick={handleSubmit}
                         disabled={isSubmitting}
                         className={`w-full bg-gradient-to-r ${
-                          getQuadrantColors(selectedQuadrant).gradient
+                          getQuadrantColors(
+                            selectedFeelingData.quadrant as QuadrantType
+                          ).gradient
                         } text-white font-medium px-6 py-3 rounded-lg shadow-lg hover:opacity-90 transition-all duration-300`}
                       >
                         {isSubmitting ? "Logging..." : "Log Mood"}
@@ -445,7 +902,7 @@ const MoodMeter = ({ user }: MoodMeterProps) => {
                     </div>
                   </motion.div>
                 )}
-              </div>
+              </>
             )}
           </div>
         )}

@@ -24,7 +24,7 @@ export const MOOD_QUADRANTS = {
       { name: "scared", definition: "Afraid or frightened", valence: -0.708, arousal: 0.656 },
       { name: "shocked", definition: "Surprised or upset by something unexpected", valence: -0.416, arousal: 0.546 },
       { name: "stressed", definition: "Experiencing mental or emotional strain or tension", valence: -0.666, arousal: 0.48 },
-      { name: "tense", definition: "unable to relax", valence: -0.208, arousal: -0.122 },
+      { name: "panicked", definition: "Feeling extremely anxious or frightened", valence: -0.8, arousal: 0.898 },
       { name: "terrified", definition: "Extremely frightened or afraid", valence: -0.82, arousal: 0.804 },
       { name: "troubled", definition: "Experiencing distress, anxiety, or difficulty", valence: -0.666, arousal: 0.254 },
       { name: "uneasy", definition: "vague sense that something is wrong", valence: -0.77, arousal: 0.196 },
