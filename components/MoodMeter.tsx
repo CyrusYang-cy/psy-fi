@@ -226,18 +226,8 @@ const MoodMeter = ({ user }: MoodMeterProps) => {
 
   // Toggle quadrant visibility
   const toggleQuadrantVisibility = (quadrant: QuadrantType) => {
-    setVisibleQuadrants((prev) => {
-      if (prev.includes(quadrant)) {
-        if (prev.length > 1) {
-          // Only allow removing if at least one quadrant will remain visible
-          return prev.filter((q) => q !== quadrant);
-        }
-        return prev;
-      } else {
-        // When adding a new quadrant, maintain zoom level
-        return [...prev, quadrant];
-      }
-    });
+    // Instead of toggling, just set the visible quadrant to the one clicked
+    setVisibleQuadrants([quadrant]);
   };
 
   // Memoize the quadrant colors to avoid recalculation
@@ -919,12 +909,12 @@ const MoodMeter = ({ user }: MoodMeterProps) => {
                 {/* Quadrant Visibility Controls */}
                 <div className="w-full mb-4 flex flex-wrap gap-3 items-center justify-center">
                   <div className="text-sm text-gray-400 mr-2">
-                    Filter feelings:
+                    Show quadrant:
                   </div>
                   {Object.entries(MOOD_QUADRANTS).map(([key, quadrant]) => {
                     const quadrantKey = key as QuadrantType;
                     const colors = getQuadrantColors(quadrantKey);
-                    const isVisible = visibleQuadrants.includes(quadrantKey);
+                    const isVisible = visibleQuadrants.includes(quadrantKey) && visibleQuadrants.length === 1;
 
                     return (
                       <button
@@ -940,6 +930,14 @@ const MoodMeter = ({ user }: MoodMeterProps) => {
                       </button>
                     );
                   })}
+                  {visibleQuadrants.length === 1 && (
+                    <button
+                      className="px-3 py-1 rounded-full text-xs font-medium transition-colors bg-gray-800 border border-gray-700 hover:bg-gray-700"
+                      onClick={() => setVisibleQuadrants(["red", "blue", "green", "yellow"])}
+                    >
+                      Show All
+                    </button>
+                  )}
                 </div>
 
                 {/* Search Bar */}
@@ -1073,7 +1071,7 @@ const MoodMeter = ({ user }: MoodMeterProps) => {
                         htmlFor="note"
                         className="block text-gray-400 mb-2"
                       >
-                        Add a note about how you're feeling (optional)
+                        Add a note about how you&apos;re feeling (optional)
                       </label>
                       <textarea
                         id="note"
