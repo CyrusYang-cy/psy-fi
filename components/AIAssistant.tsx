@@ -147,13 +147,51 @@ export function AIAssistant() {
     ]);
 
     try {
-      // Call your backend API with the mood data
-      const response = await fetch(
-        `/api/financial-assistant?emotion=${moodData.feeling}&purchase_history=recent purchases include $50 at restaurant, $120 on clothing`,
-        {
-          method: "POST",
-        }
-      );
+      // Get dates in YYYY-MM-DD format
+      const today = new Date();
+      const thirtyDaysAgo = new Date();
+      thirtyDaysAgo.setDate(today.getDate() - 30);
+
+      const startDate = thirtyDaysAgo.toISOString().split("T")[0]; // Format as YYYY-MM-DD
+      const endDate = today.toISOString().split("T")[0]; // Format as YYYY-MM-DD
+
+      // First, fetch recent transactions from our Plaid integration
+      const transactionResponse = await fetch("/api/fetchTransaction", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          institution_id: "ins_1", // Default sandbox institution
+          start_date: startDate,
+          end_date: endDate,
+        }),
+      });
+
+      if (!transactionResponse.ok) {
+        throw new Error("Failed to fetch transaction data");
+      }
+
+      const transactionData = await transactionResponse.json();
+
+      // Format transactions for the financial assistant
+      const recentTransactions = transactionData.transactions
+        .slice(0, 10) // Get the 10 most recent transactions
+        .map((tx: any) => `$${tx.amount} at ${tx.name} on ${tx.date}`)
+        .join(", ");
+
+      // Now call the financial assistant with both mood and transaction data
+      const response = await fetch(`/api/financial-assistant`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          emotion: moodData.feeling,
+          purchase_history:
+            recentTransactions || "No recent transactions found",
+        }),
+      });
 
       if (!response.ok) {
         throw new Error("Failed to get response from assistant");
@@ -236,11 +274,6 @@ export function AIAssistant() {
       // Extract emotion from user message (simplified approach)
       const emotion = extractEmotion(input);
 
-      // In a real app, you would fetch purchase history from your backend
-      // For now, we'll use a placeholder
-      const purchaseHistory =
-        "recent purchases include $50 at restaurant, $120 on clothing";
-
       // Add a temporary loading message
       setMessages((prev) => [
         ...prev,
@@ -250,15 +283,51 @@ export function AIAssistant() {
         },
       ]);
 
+      // Get dates in YYYY-MM-DD format
+      const today = new Date();
+      const thirtyDaysAgo = new Date();
+      thirtyDaysAgo.setDate(today.getDate() - 30);
+
+      const startDate = thirtyDaysAgo.toISOString().split("T")[0]; // Format as YYYY-MM-DD
+      const endDate = today.toISOString().split("T")[0]; // Format as YYYY-MM-DD
+
+      // First, fetch recent transactions from our Plaid integration
+      const transactionResponse = await fetch("/api/fetchTransaction", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          institution_id: "ins_1", // Default sandbox institution
+          start_date: startDate,
+          end_date: endDate,
+        }),
+      });
+
+      if (!transactionResponse.ok) {
+        throw new Error("Failed to fetch transaction data");
+      }
+
+      const transactionData = await transactionResponse.json();
+
+      // Format transactions for the financial assistant
+      const recentTransactions = transactionData.transactions
+        .slice(0, 10) // Get the 10 most recent transactions
+        .map((tx: any) => `$${tx.amount} at ${tx.name} on ${tx.date}`)
+        .join(", ");
+
       // Call your backend API
-      const response = await fetch(
-        `/api/financial-assistant?emotion=${emotion}&purchase_history=${encodeURIComponent(
-          purchaseHistory
-        )}`,
-        {
-          method: "POST",
-        }
-      );
+      const response = await fetch(`/api/financial-assistant`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          emotion: emotion,
+          purchase_history:
+            recentTransactions || "No recent transactions found",
+        }),
+      });
 
       if (!response.ok) {
         throw new Error("Failed to get response from assistant");
