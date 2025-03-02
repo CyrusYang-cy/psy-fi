@@ -35,36 +35,32 @@ export default async function AnalysisPage() {
             Understanding Your Mood Patterns
           </h2>
           <p className="text-gray-300 mb-4">
-            Your mood graph shows your emotional journey over time. Each point
-            represents a mood entry, with the vertical position indicating the
-            type of mood:
+            Your mood graph visualizes your emotional journey over time with two
+            key trend lines:
           </p>
           <ul className="list-disc pl-6 text-gray-300 space-y-2">
             <li>
-              <span className="text-yellow-400 font-medium">
-                Yellow zone (top)
-              </span>
-              : High energy, high pleasantness (excited, happy, curious)
-            </li>
-            <li>
-              <span className="text-red-400 font-medium">Red zone</span>: High
-              energy, low pleasantness (angry, anxious, stressed)
-            </li>
-            <li>
-              <span className="text-green-400 font-medium">Green zone</span>:
-              Low energy, high pleasantness (calm, content, relaxed)
-            </li>
-            <li>
               <span className="text-blue-400 font-medium">
-                Blue zone (bottom)
+                Blue line (Valence)
               </span>
-              : Low energy, low pleasantness (sad, tired, disappointed)
+              : Represents the pleasantness of your mood, ranging from negative
+              (-1) to positive (+1)
+            </li>
+            <li>
+              <span className="text-red-400 font-medium">
+                Red line (Arousal)
+              </span>
+              : Represents your energy level, ranging from low energy (-1) to
+              high energy (+1)
             </li>
           </ul>
+
           <p className="text-gray-300 mt-4">
-            Hover over any point to see details about that mood entry. Look for
-            patterns in your mood over time to better understand your emotional
-            health.
+            Hover anywhere on the graph to see details for that specific date. A
+            vertical line will appear showing the mood data for that moment,
+            along with any significant events. Look for patterns in how the two
+            lines move together or diverge to better understand your emotional
+            health over time.
           </p>
         </div>
       </section>
