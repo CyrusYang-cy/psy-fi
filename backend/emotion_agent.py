@@ -39,6 +39,11 @@ class ChatRequest(BaseModel):
     stream: Optional[bool] = False
 
 
+class FinancialAssistantRequest(BaseModel):
+    emotion: str
+    purchase_history: str
+
+
 @app.post("/chat/completions")
 async def chat_completions(request: ChatRequest):
     """
@@ -69,14 +74,25 @@ async def root():
     """
     return {"message": "DeepSeek API Proxy is running. Use /chat/completions endpoint for chat completions."}
 
-# Example of how to use the financial assistant functionality
+# Updated financial assistant endpoint to handle JSON requests
 
 
 @app.post("/financial-assistant")
-async def financial_assistant(emotion: str, purchase_history: str):
+async def financial_assistant(request: Request):
     """
     Endpoint for financial assistant functionality
+    Handles both JSON body and query parameters
     """
+    # Try to get data from JSON body first
+    try:
+        json_data = await request.json()
+        emotion = json_data.get("emotion", "neutral")
+        purchase_history = json_data.get("purchase_history", "")
+    except:
+        # If JSON parsing fails, try query parameters
+        emotion = request.query_params.get("emotion", "neutral")
+        purchase_history = request.query_params.get("purchase_history", "")
+
     prompt = f"""
     You are a financial assistant dedicated to helping users prevent emotional spending.
     The user is currently feeling {emotion} and has recently made these purchases: {purchase_history}.
@@ -105,6 +121,7 @@ async def financial_assistant(emotion: str, purchase_history: str):
     except requests.exceptions.RequestException as e:
         raise HTTPException(
             status_code=500, detail=f"Error calling DeepSeek API: {str(e)}")
+
 
 if __name__ == "__main__":
     import uvicorn
