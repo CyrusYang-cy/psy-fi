@@ -213,6 +213,29 @@ const SpendingMoodGraph = ({
       }
     > = {};
 
+    // For longer time periods, we need to ensure we have entries for all days
+    // to maintain consistent spacing on the graph
+    if (timeScale !== "1W") {
+      const dateRange = getDateRange();
+      if (dateRange) {
+        let { startDate, endDate } = dateRange;
+        let currentDate = startDate;
+        
+        while (currentDate <= endDate) {
+          const dayKey = formatters.dayKey(currentDate);
+          dataByDay[dayKey] = {
+            date: dayKey,
+            moodEntries: [],
+            transactions: [],
+            avgValence: null,
+            avgArousal: null,
+            totalSpending: 0,
+          };
+          currentDate = addDays(currentDate, 1);
+        }
+      }
+    }
+
     // Group mood entries by day
     moodData.forEach((entry) => {
       const day = formatters.dayKey(new Date(entry.timestamp));
@@ -278,7 +301,7 @@ const SpendingMoodGraph = ({
     return Object.values(dataByDay).sort((a, b) => {
       return new Date(a.date).getTime() - new Date(b.date).getTime();
     });
-  }, [getFilteredData, getFeelingInfo]);
+  }, [getFilteredData, getFeelingInfo, timeScale, getDateRange]);
 
   // Memoize the aggregated data
   const aggregatedData = useMemo(
@@ -297,8 +320,9 @@ const SpendingMoodGraph = ({
   // Map valence/arousal values (-1 to 1) to y-axis positions (80-20)
   const getMoodYPosition = useCallback((value: number | null) => {
     if (value === null) return 50; // Center for placeholder entries
-    // Convert from [-1, 1] to [80, 20] with padding to prevent touching edges
-    return 50 - value * 30;
+    // Convert from [-1, 1] to [10, 90] with proper scaling
+    // This ensures -1 is at the bottom (90%) and +1 is at the top (10%)
+    return 90 - ((value + 1) / 2) * 80;
   }, []);
 
   // Map spending values to y-axis positions (90-10)
@@ -315,8 +339,8 @@ const SpendingMoodGraph = ({
   // Get X position based on index
   const getXPosition = useCallback((index: number, totalPoints: number) => {
     if (totalPoints <= 1) return 50; // Center if only one point
-    // Distribute points with padding on left and right (5% on each side)
-    return 5 + (index / (totalPoints - 1)) * 90;
+    // Distribute points with padding on left and right (10% on each side)
+    return 10 + (index / (totalPoints - 1)) * 80;
   }, []);
 
   // Handle mouse movement for finding closest point
@@ -342,11 +366,21 @@ const SpendingMoodGraph = ({
         }
       });
 
-      setHoveredPointIndex(closestIdx);
-      setHoverPosition({
-        x: mouseX,
-        y: e.clientY - rect.top,
-      });
+      // Only update if we're reasonably close to a point (within 7% of graph width)
+      if (closestDistance < 0.07) {
+        setHoveredPointIndex(closestIdx);
+        
+        // Calculate the exact position for the tooltip based on the data point
+        const pointXPos = getXPosition(closestIdx, aggregatedData.length) / 100 * rect.width;
+        
+        setHoverPosition({
+          x: pointXPos,
+          y: e.clientY - rect.top,
+        });
+      } else {
+        setHoveredPointIndex(null);
+        setHoverPosition(null);
+      }
     },
     [aggregatedData, getXPosition]
   );
@@ -418,11 +452,16 @@ const SpendingMoodGraph = ({
   // Generate SVG paths for mood and spending lines
   const lines = useMemo(() => {
     if (aggregatedData.length <= 1)
-      return { valence: "", arousal: "", spending: "" };
+      return { valencePath: "", arousalPath: "", spendingPath: "" };
 
     let valencePath = "";
     let arousalPath = "";
     let spendingPath = "";
+
+    // Track if we've started a path
+    let valencePathStarted = false;
+    let arousalPathStarted = false;
+    let spendingPathStarted = false;
 
     aggregatedData.forEach((point, index) => {
       const x = getXPosition(index, aggregatedData.length);
@@ -430,29 +469,34 @@ const SpendingMoodGraph = ({
       // Valence line
       if (point.avgValence !== null) {
         const yValence = getMoodYPosition(point.avgValence);
-        if (index === 0 || !aggregatedData[index - 1].avgValence) {
-          valencePath += `M ${x},${yValence} `;
+        if (!valencePathStarted) {
+          valencePath += `M${x},${yValence} `;
+          valencePathStarted = true;
         } else {
-          valencePath += `L ${x},${yValence} `;
+          valencePath += `L${x},${yValence} `;
         }
       }
 
       // Arousal line
       if (point.avgArousal !== null) {
         const yArousal = getMoodYPosition(point.avgArousal);
-        if (index === 0 || !aggregatedData[index - 1].avgArousal) {
-          arousalPath += `M ${x},${yArousal} `;
+        if (!arousalPathStarted) {
+          arousalPath += `M${x},${yArousal} `;
+          arousalPathStarted = true;
         } else {
-          arousalPath += `L ${x},${yArousal} `;
+          arousalPath += `L${x},${yArousal} `;
         }
       }
 
       // Spending line
-      const ySpending = getSpendingYPosition(point.totalSpending);
-      if (index === 0) {
-        spendingPath += `M ${x},${ySpending} `;
-      } else {
-        spendingPath += `L ${x},${ySpending} `;
+      if (point.totalSpending > 0) {
+        const ySpending = getSpendingYPosition(point.totalSpending);
+        if (!spendingPathStarted) {
+          spendingPath += `M${x},${ySpending} `;
+          spendingPathStarted = true;
+        } else {
+          spendingPath += `L${x},${ySpending} `;
+        }
       }
     });
 
@@ -463,9 +507,27 @@ const SpendingMoodGraph = ({
   const xAxisLabels = useMemo(() => {
     if (aggregatedData.length <= 1) return [];
 
-    // For simplicity, just show first, middle and last date
+    // Show more labels for better readability
     const totalPoints = aggregatedData.length;
-    const labelIndices = [0, Math.floor(totalPoints / 2), totalPoints - 1];
+    let labelIndices = [];
+    
+    if (totalPoints <= 7) {
+      // For few points, show all dates
+      labelIndices = Array.from({ length: totalPoints }, (_, i) => i);
+    } else if (totalPoints <= 31) {
+      // For medium datasets (like a month), show every 5th day
+      labelIndices = Array.from({ length: totalPoints }, (_, i) => i)
+        .filter(i => i % 5 === 0 || i === totalPoints - 1);
+    } else {
+      // For larger datasets, show start, 25%, 50%, 75%, and end
+      labelIndices = [
+        0,
+        Math.floor(totalPoints * 0.25),
+        Math.floor(totalPoints * 0.5),
+        Math.floor(totalPoints * 0.75),
+        totalPoints - 1
+      ];
+    }
 
     return labelIndices.map((index) => ({
       position: getXPosition(index, totalPoints),
@@ -570,24 +632,29 @@ const SpendingMoodGraph = ({
         </div>
       </div>
 
+      {/* Graph explanation */}
+      <div className="text-xs text-gray-400 mb-3 italic">
+        This graph shows how your mood (valence and arousal) correlates with your daily spending patterns over time.
+      </div>
+
       <div
         ref={graphRef}
-        className="relative h-64 w-full border-b border-l border-gray-600 mt-2 ml-8"
+        className="relative h-64 w-full border-b border-l border-gray-600 mt-2 ml-8 mr-8 bg-gray-800/30 rounded-tl-md"
         onMouseMove={handleMouseMove}
         onMouseLeave={handleMouseLeave}
       >
         {/* Left Y-axis for mood */}
         <div className="absolute -left-7 -top-4 h-full flex flex-col justify-between">
-          <div className="text-xs text-gray-400">Mood</div>
-          <div className="text-xs text-gray-400">+1</div>
+          <div className="text-xs text-gray-400 font-semibold">Mood</div>
+          <div className="text-xs text-blue-400">+1</div>
           <div className="text-xs text-gray-400">0</div>
-          <div className="text-xs text-gray-400">-1</div>
+          <div className="text-xs text-red-400">-1</div>
         </div>
 
         {/* Right Y-axis for spending */}
         <div className="absolute -right-20 -top-4 h-full flex flex-col justify-between">
-          <div className="text-xs text-gray-400">Spending</div>
-          <div className="text-xs text-gray-400">
+          <div className="text-xs text-gray-400 font-semibold">Spending</div>
+          <div className="text-xs text-green-400">
             {formatters.currency(maxSpending)}
           </div>
           <div className="text-xs text-gray-400">
@@ -605,61 +672,127 @@ const SpendingMoodGraph = ({
           <div className="absolute bottom-0 w-full h-px bg-gray-700" />
         </div>
 
+        {/* Vertical grid lines */}
+        <div className="absolute top-0 left-0 w-full h-full">
+          {xAxisLabels.map((label, index) => (
+            <div 
+              key={`grid-line-${index}`}
+              className="absolute h-full w-px bg-gray-700/50"
+              style={{ left: `${label.position}%` }}
+            />
+          ))}
+        </div>
+
+        {/* Mood quadrant indicators */}
+        <div className="absolute inset-0 pointer-events-none">
+          <div className="absolute top-0 left-0 w-1/2 h-1/2 border-r border-b border-gray-700/30 flex items-center justify-center">
+            <span className="text-[10px] text-gray-500 opacity-30">Positive / High Energy</span>
+          </div>
+          <div className="absolute top-0 right-0 w-1/2 h-1/2 border-b border-gray-700/30 flex items-center justify-center">
+            <span className="text-[10px] text-gray-500 opacity-30">Positive / Low Energy</span>
+          </div>
+          <div className="absolute bottom-0 left-0 w-1/2 h-1/2 border-r border-gray-700/30 flex items-center justify-center">
+            <span className="text-[10px] text-gray-500 opacity-30">Negative / High Energy</span>
+          </div>
+          <div className="absolute bottom-0 right-0 w-1/2 h-1/2 flex items-center justify-center">
+            <span className="text-[10px] text-gray-500 opacity-30">Negative / Low Energy</span>
+          </div>
+        </div>
+
         {/* SVG for all lines */}
         <svg
           className="absolute inset-0 h-full w-full pointer-events-none"
           style={{ zIndex: 1 }}
+          viewBox="0 0 100 100"
+          preserveAspectRatio="none"
         >
+          {/* Area under spending line */}
+          {lines.spendingPath && (
+            <path
+              d={`${lines.spendingPath} L100,90 L0,90 Z`}
+              fill="rgba(16, 185, 129, 0.1)"
+              stroke="none"
+            />
+          )}
+
           {/* Valence line (blue) */}
-          <path
-            d={lines.valencePath}
-            stroke="rgba(59, 130, 246, 0.8)"
-            strokeWidth="2"
-            fill="none"
-          />
+          {lines.valencePath && (
+            <path
+              d={lines.valencePath}
+              stroke="rgba(59, 130, 246, 0.8)"
+              strokeWidth="1.5"
+              fill="none"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              vectorEffect="non-scaling-stroke"
+            />
+          )}
 
           {/* Arousal line (red) */}
-          <path
-            d={lines.arousalPath}
-            stroke="rgba(239, 68, 68, 0.8)"
-            strokeWidth="2"
-            fill="none"
-          />
+          {lines.arousalPath && (
+            <path
+              d={lines.arousalPath}
+              stroke="rgba(239, 68, 68, 0.8)"
+              strokeWidth="1.5"
+              fill="none"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              vectorEffect="non-scaling-stroke"
+            />
+          )}
 
           {/* Spending line (green) */}
-          <path
-            d={lines.spendingPath}
-            stroke="rgba(16, 185, 129, 0.8)"
-            strokeWidth="2"
-            fill="none"
-          />
+          {lines.spendingPath && (
+            <path
+              d={lines.spendingPath}
+              stroke="rgba(16, 185, 129, 0.8)"
+              strokeWidth="1.5"
+              fill="none"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              vectorEffect="non-scaling-stroke"
+            />
+          )}
 
-          {/* Data points */}
+          {/* Data points - only show on hover */}
           {aggregatedData.map((dataPoint, index) => (
             <g key={`data-point-${index}`}>
-              {dataPoint.avgValence !== null && (
-                <circle
-                  cx={`${getXPosition(index, aggregatedData.length)}%`}
-                  cy={`${getMoodYPosition(dataPoint.avgValence)}%`}
-                  r={index === hoveredPointIndex ? 4 : 3}
-                  fill="rgba(59, 130, 246, 0.8)"
-                />
-              )}
-              {dataPoint.avgArousal !== null && (
-                <circle
-                  cx={`${getXPosition(index, aggregatedData.length)}%`}
-                  cy={`${getMoodYPosition(dataPoint.avgArousal)}%`}
-                  r={index === hoveredPointIndex ? 4 : 3}
-                  fill="rgba(239, 68, 68, 0.8)"
-                />
-              )}
-              {dataPoint.totalSpending > 0 && (
-                <circle
-                  cx={`${getXPosition(index, aggregatedData.length)}%`}
-                  cy={`${getSpendingYPosition(dataPoint.totalSpending)}%`}
-                  r={index === hoveredPointIndex ? 4 : 3}
-                  fill="rgba(16, 185, 129, 0.8)"
-                />
+              {index === hoveredPointIndex && (
+                <>
+                  {dataPoint.avgValence !== null && (
+                    <circle
+                      cx={getXPosition(index, aggregatedData.length)}
+                      cy={getMoodYPosition(dataPoint.avgValence)}
+                      r="2.5"
+                      fill="rgba(59, 130, 246, 1)"
+                      stroke="white"
+                      strokeWidth="1"
+                      vectorEffect="non-scaling-stroke"
+                    />
+                  )}
+                  {dataPoint.avgArousal !== null && (
+                    <circle
+                      cx={getXPosition(index, aggregatedData.length)}
+                      cy={getMoodYPosition(dataPoint.avgArousal)}
+                      r="2.5"
+                      fill="rgba(239, 68, 68, 1)"
+                      stroke="white"
+                      strokeWidth="1"
+                      vectorEffect="non-scaling-stroke"
+                    />
+                  )}
+                  {dataPoint.totalSpending > 0 && (
+                    <circle
+                      cx={getXPosition(index, aggregatedData.length)}
+                      cy={getSpendingYPosition(dataPoint.totalSpending)}
+                      r="2.5"
+                      fill="rgba(16, 185, 129, 1)"
+                      stroke="white"
+                      strokeWidth="1"
+                      vectorEffect="non-scaling-stroke"
+                    />
+                  )}
+                </>
               )}
             </g>
           ))}
@@ -674,57 +807,123 @@ const SpendingMoodGraph = ({
               style={{ left: `${hoverPosition.x}px`, zIndex: 15 }}
             />
 
-            {/* Tooltip */}
+            {/* Date indicator at the bottom of the vertical line */}
             <div
-              className="absolute z-50 p-3 bg-gray-900 text-white text-xs rounded shadow-lg border border-gray-700 pointer-events-none"
-              style={{
-                left: `${hoverPosition.x + 10}px`,
-                top: `${Math.min(hoverPosition.y - 10, 180)}px`,
-                maxWidth: "250px",
+              className="absolute bottom-0 transform -translate-x-1/2 bg-gray-900 text-white text-xs px-2 py-0.5 rounded pointer-events-none"
+              style={{ 
+                left: `${hoverPosition.x}px`, 
+                zIndex: 16,
+                marginBottom: "-22px"
               }}
             >
-              <div className="font-semibold mb-1">
+              {format(parseISO(hoveredDataPoint.date), "MMM d")}
+            </div>
+
+            {/* Horizontal lines for each data point */}
+            {hoveredDataPoint.avgValence !== null && (
+              <div
+                className="absolute w-full h-px bg-blue-500/50 pointer-events-none"
+                style={{ 
+                  top: `${getMoodYPosition(hoveredDataPoint.avgValence)}%`, 
+                  zIndex: 14 
+                }}
+              />
+            )}
+            {hoveredDataPoint.avgArousal !== null && (
+              <div
+                className="absolute w-full h-px bg-red-500/50 pointer-events-none"
+                style={{ 
+                  top: `${getMoodYPosition(hoveredDataPoint.avgArousal)}%`, 
+                  zIndex: 14 
+                }}
+              />
+            )}
+            {hoveredDataPoint.totalSpending > 0 && (
+              <div
+                className="absolute w-full h-px bg-green-500/50 pointer-events-none"
+                style={{ 
+                  top: `${getSpendingYPosition(hoveredDataPoint.totalSpending)}%`, 
+                  zIndex: 14 
+                }}
+              />
+            )}
+
+            {/* Tooltip */}
+            <div
+              className="absolute z-50 p-3 bg-gray-900 text-white text-xs rounded-lg shadow-lg border border-gray-700 pointer-events-none"
+              style={{
+                left: `${hoverPosition.x}px`,
+                top: `10px`,
+                transform: `translateX(${hoverPosition.x > (graphRef.current?.getBoundingClientRect().width || 0) / 2 ? '-100%' : '0'})`,
+                maxWidth: "280px",
+              }}
+            >
+              <div className="font-semibold mb-2 text-sm border-b border-gray-700 pb-1">
                 {format(parseISO(hoveredDataPoint.date), "MMMM d, yyyy")}
               </div>
 
-              <div className="grid grid-cols-2 gap-2 mt-2">
-                <div>
-                  <p className="text-[10px] text-gray-400">Valence</p>
-                  <p className="font-medium text-blue-400">
-                    {hoveredDataPoint.avgValence?.toFixed(2) || "No data"}
+              <div className="grid grid-cols-2 gap-3 mt-2">
+                <div className="bg-gray-800/50 p-2 rounded">
+                  <p className="text-[10px] text-blue-400 font-medium">Valence</p>
+                  <p className="font-medium text-white">
+                    {hoveredDataPoint.avgValence !== null 
+                      ? hoveredDataPoint.avgValence.toFixed(2) 
+                      : "No data"}
+                  </p>
+                  <p className="text-[9px] text-gray-400 mt-1">
+                    {hoveredDataPoint.avgValence !== null 
+                      ? hoveredDataPoint.avgValence > 0 
+                        ? "Positive feeling" 
+                        : "Negative feeling"
+                      : ""}
                   </p>
                 </div>
-                <div>
-                  <p className="text-[10px] text-gray-400">Arousal</p>
-                  <p className="font-medium text-red-400">
-                    {hoveredDataPoint.avgArousal?.toFixed(2) || "No data"}
+                <div className="bg-gray-800/50 p-2 rounded">
+                  <p className="text-[10px] text-red-400 font-medium">Arousal</p>
+                  <p className="font-medium text-white">
+                    {hoveredDataPoint.avgArousal !== null 
+                      ? hoveredDataPoint.avgArousal.toFixed(2) 
+                      : "No data"}
+                  </p>
+                  <p className="text-[9px] text-gray-400 mt-1">
+                    {hoveredDataPoint.avgArousal !== null 
+                      ? hoveredDataPoint.avgArousal > 0 
+                        ? "High energy" 
+                        : "Low energy"
+                      : ""}
                   </p>
                 </div>
               </div>
 
-              <div className="mt-2 pt-1 border-t border-gray-700">
-                <p className="text-[10px] text-gray-400">Daily Spending</p>
-                <p className="font-medium text-green-400">
-                  {formatters.currency(hoveredDataPoint.totalSpending)}
-                </p>
+              <div className="mt-3 pt-2 border-t border-gray-700">
+                <div className="bg-gray-800/50 p-2 rounded">
+                  <p className="text-[10px] text-green-400 font-medium">Daily Spending</p>
+                  <p className="font-medium text-white">
+                    {formatters.currency(hoveredDataPoint.totalSpending)}
+                  </p>
+                  <p className="text-[9px] text-gray-400 mt-1">
+                    {hoveredDataPoint.transactions.length} transaction{hoveredDataPoint.transactions.length !== 1 ? 's' : ''}
+                  </p>
+                </div>
 
                 {hoveredDataPoint.transactions.length > 0 && (
-                  <div className="mt-1">
-                    <p className="text-[10px] text-gray-400 mb-1">
-                      Transactions:
+                  <div className="mt-2">
+                    <p className="text-[10px] text-gray-400 mb-1 font-medium">
+                      Top Transactions:
                     </p>
                     <div className="max-h-24 overflow-y-auto">
                       {hoveredDataPoint.transactions
+                        .sort((a: any, b: any) => b.amount - a.amount)
                         .slice(0, 3)
                         .map((t: any, i: number) => (
                           <div
                             key={`tx-${i}`}
-                            className="flex justify-between text-[10px]"
+                            className="flex justify-between text-[10px] py-1 border-b border-gray-700/50"
                           >
-                            <span className="truncate max-w-[120px]">
+                            <span className="truncate max-w-[150px]">
                               {t.name}
                             </span>
-                            <span className="text-green-400 ml-2">
+                            <span className="text-green-400 ml-2 font-medium">
                               {formatters.currency(t.amount)}
                             </span>
                           </div>
@@ -745,14 +944,14 @@ const SpendingMoodGraph = ({
       </div>
 
       {/* X-axis labels */}
-      <div className="flex justify-between mt-1 text-xs text-gray-400 ml-8 mr-8">
+      <div className="relative h-6 mt-1 text-xs text-gray-400 ml-8 mr-8">
         {xAxisLabels.map((label, index) => (
           <span
             key={`x-label-${index}`}
+            className="absolute transform -translate-x-1/2"
             style={{
-              position: "absolute",
               left: `${label.position}%`,
-              transform: "translateX(-50%)",
+              top: 0
             }}
           >
             {label.label}
@@ -760,21 +959,33 @@ const SpendingMoodGraph = ({
         ))}
       </div>
 
-      {/* Legend */}
-      <div className="mt-6 flex flex-wrap items-center gap-4">
-        <div className="flex items-center">
-          <div className="w-3 h-1 rounded-full bg-blue-500 mr-2"></div>
+      {/* Legend with improved styling */}
+      <div className="mt-6 flex flex-wrap items-center gap-4 justify-center">
+        <div className="flex items-center bg-gray-700/30 px-3 py-1 rounded-full">
+          <div className="w-4 h-2 rounded-full bg-blue-500 mr-2"></div>
           <span className="text-xs text-gray-300">Valence (pleasantness)</span>
         </div>
-        <div className="flex items-center">
-          <div className="w-3 h-1 rounded-full bg-red-500 mr-2"></div>
+        <div className="flex items-center bg-gray-700/30 px-3 py-1 rounded-full">
+          <div className="w-4 h-2 rounded-full bg-red-500 mr-2"></div>
           <span className="text-xs text-gray-300">Arousal (energy)</span>
         </div>
-        <div className="flex items-center">
-          <div className="w-3 h-1 rounded-full bg-green-500 mr-2"></div>
+        <div className="flex items-center bg-gray-700/30 px-3 py-1 rounded-full">
+          <div className="w-4 h-2 rounded-full bg-green-500 mr-2"></div>
           <span className="text-xs text-gray-300">Daily Spending</span>
         </div>
       </div>
+
+      {/* Insights section */}
+      {aggregatedData.length > 0 && (
+        <div className="mt-4 p-3 bg-gray-700/30 rounded-lg text-xs text-gray-300">
+          <h4 className="font-semibold mb-1">Insights</h4>
+          <p>
+            {aggregatedData.some(d => d.avgValence !== null && d.totalSpending > 0) 
+              ? "This graph shows how your mood correlates with your spending patterns. Hover over data points to see details."
+              : "Add more mood entries and transactions to see correlations between your mood and spending habits."}
+          </p>
+        </div>
+      )}
     </div>
   );
 };
