@@ -923,12 +923,20 @@ const MoodMeter = ({ user }: MoodMeterProps) => {
                               initial={{ opacity: 0, y: -10 }}
                               animate={{ opacity: 1, y: -20 }}
                               exit={{ opacity: 0, y: -10 }}
-                              className={`absolute bottom-full mb-2 p-3 rounded-lg ${colors.bg} border ${colors.border} text-white text-sm max-w-[200px] z-20 text-center`}
+                              className="absolute bottom-full mb-2 p-3 rounded-lg bg-gray-900/60 backdrop-blur-md z-20 text-center"
                               style={{
-                                boxShadow: `0 0 10px ${colors.fill}80`,
+                                boxShadow: `0 0 15px ${colors.fill}60`,
+                                borderColor: colors.fill,
+                                borderWidth: "1px",
+                                maxWidth: "200px"
                               }}
                             >
-                              {feeling.definition}
+                              <div className="font-bold mb-1 text-white" style={{ textShadow: "0 1px 2px rgba(0,0,0,0.8)" }}>
+                                {feeling.name}
+                              </div>
+                              <div className="text-white" style={{ textShadow: "0 1px 1px rgba(0,0,0,0.5)" }}>
+                                {feeling.definition}
+                              </div>
                             </motion.div>
                           )}
                         </AnimatePresence>
@@ -950,9 +958,11 @@ const MoodMeter = ({ user }: MoodMeterProps) => {
                           animate={isSelected || isHovered ? "hover" : "initial"}
                           layout
                         >
-                          <h3 className={`${colors.text} text-base font-bold z-10 text-center px-2`}>
-                            {feeling.name}
-                          </h3>
+                          <div className="absolute inset-0 flex items-center justify-center z-10">
+                            <span className="text-white font-extrabold text-center text-shadow-md" style={{ textShadow: `0 1px 3px rgba(0,0,0,0.8), 0 0 8px ${colors.fill}` }}>
+                              {feeling.name}
+                            </span>
+                          </div>
                         </motion.div>
                       </motion.div>
                     );
@@ -968,16 +978,17 @@ const MoodMeter = ({ user }: MoodMeterProps) => {
                       getQuadrantColors(selectedFeelingData.quadrant!).bg
                     } border ${
                       getQuadrantColors(selectedFeelingData.quadrant!).border
-                    } mb-6`}
+                    } mb-6 bg-gray-900/55 backdrop-blur-md`}
                   >
                     <h3
-                      className={`text-xl font-bold mb-2 ${
-                        getQuadrantColors(selectedFeelingData.quadrant!).text
-                      }`}
+                      className="text-xl font-extrabold text-white mb-2"
+                      style={{ 
+                        textShadow: `0 1px 3px rgba(0,0,0,0.8), 0 0 5px ${getQuadrantColors(selectedFeelingData.quadrant!).fill}` 
+                      }}
                     >
                       {selectedFeelingData.name}
                     </h3>
-                    <p className="text-white mb-4">
+                    <p className="text-white font-medium mb-4" style={{ textShadow: "0 1px 1px rgba(0,0,0,0.5)" }}>
                       {selectedFeelingData.definition}
                     </p>
                     <div className="flex gap-4 text-sm">
@@ -999,33 +1010,28 @@ const MoodMeter = ({ user }: MoodMeterProps) => {
 
                 <AnimatePresence>
                   {isPopupOpen && selectedFeelingData && (
-                    <motion.div
-                      initial={{ opacity: 0 }}
-                      animate={{ opacity: 1 }}
-                      exit={{ opacity: 0 }}
-                      className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4"
-                      onClick={(e) => {
-                        if (e.target === e.currentTarget) {
-                          closePopup();
-                        }
-                      }}
-                    >
+                    <div className="fixed inset-0 flex items-center justify-center z-50">
+                      <div 
+                        className="absolute inset-0 bg-black/40 backdrop-blur-sm" 
+                        onClick={closePopup}
+                      ></div>
                       <motion.div
-                        initial={{ scale: 0.9, opacity: 0 }}
-                        animate={{ scale: 1, opacity: 1 }}
-                        exit={{ scale: 0.9, opacity: 0 }}
-                        className={`w-full max-w-md p-6 rounded-xl ${
-                          getQuadrantColors(selectedFeelingData.quadrant!).bg
-                        } border ${
-                          getQuadrantColors(selectedFeelingData.quadrant!).border
-                        } shadow-lg`}
-                        onClick={(e) => e.stopPropagation()}
+                        initial={{ opacity: 0, scale: 0.9 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        exit={{ opacity: 0, scale: 0.9 }}
+                        className="relative bg-gray-900/65 backdrop-blur-md rounded-xl p-6 max-w-md w-full mx-4 shadow-2xl"
+                        style={{
+                          borderColor: getQuadrantColors(selectedFeelingData.quadrant || "red").fill,
+                          borderWidth: "2px",
+                          boxShadow: `0 0 20px 2px ${getQuadrantColors(selectedFeelingData.quadrant || "red").fill}60`
+                        }}
                       >
                         <div className="flex justify-between items-center mb-4">
                           <h3
-                            className={`text-xl font-bold ${
-                              getQuadrantColors(selectedFeelingData.quadrant!).text
-                            }`}
+                            className="text-xl font-extrabold text-white"
+                            style={{ 
+                              textShadow: `0 1px 3px rgba(0,0,0,0.8), 0 0 5px ${getQuadrantColors(selectedFeelingData.quadrant || "red").fill}` 
+                            }}
                           >
                             Log &ldquo;{selectedFeelingData.name}&rdquo;
                           </h3>
@@ -1050,7 +1056,7 @@ const MoodMeter = ({ user }: MoodMeterProps) => {
                           </button>
                         </div>
                         
-                        <p className="text-white mb-4">
+                        <p className="text-white font-medium mb-4" style={{ textShadow: "0 1px 1px rgba(0,0,0,0.5)" }}>
                           {selectedFeelingData.definition}
                         </p>
                         
@@ -1083,10 +1089,10 @@ const MoodMeter = ({ user }: MoodMeterProps) => {
                             onClick={handleSubmit}
                             disabled={isSubmitting}
                             className={`flex-1 py-3 rounded-lg font-medium transition-colors ${
-                              getQuadrantColors(selectedFeelingData.quadrant!).bg
+                              getQuadrantColors(selectedFeelingData.quadrant || "red").bg
                             } hover:${
-                              getQuadrantColors(selectedFeelingData.quadrant!).hover
-                            } ${getQuadrantColors(selectedFeelingData.quadrant!).text}`}
+                              getQuadrantColors(selectedFeelingData.quadrant || "red").hover
+                            } ${getQuadrantColors(selectedFeelingData.quadrant || "red").text}`}
                           >
                             {isSubmitting ? (
                               <span className="flex items-center justify-center gap-2">
@@ -1118,7 +1124,7 @@ const MoodMeter = ({ user }: MoodMeterProps) => {
                           </button>
                         </div>
                       </motion.div>
-                    </motion.div>
+                    </div>
                   )}
                 </AnimatePresence>
               </>
@@ -1172,11 +1178,12 @@ const MoodMeter = ({ user }: MoodMeterProps) => {
                           animate={isHovered ? "hover" : "initial"}
                         >
                           <h3
-                            className={`${colors.text} text-xl font-bold mb-2 z-10`}
+                            className="text-white text-xl font-extrabold z-10 text-center"
+                            style={{ textShadow: `0 1px 3px rgba(0,0,0,0.8), 0 0 5px ${colors.fill}` }}
                           >
                             {quadrant.name}
                           </h3>
-                          <p className="text-white text-center text-sm z-10">
+                          <p className="text-white text-center text-sm z-10 font-medium" style={{ textShadow: "0 1px 1px rgba(0,0,0,0.5)" }}>
                             {quadrant.description}
                           </p>
                         </motion.div>
