@@ -10,11 +10,20 @@ import {
   SheetTitle,
   SheetTrigger,
 } from "./ui/sheet";
-import { Send, X, Loader2, Sparkles } from "lucide-react";
+import { Send, X, Loader2, Sparkles, AlertTriangle } from "lucide-react";
+import { listenEvent } from "@/lib/eventEmitter";
 
 interface Message {
   role: "user" | "assistant";
   content: string;
+}
+
+interface MoodData {
+  quadrant: string;
+  feeling: string;
+  note?: string;
+  valence: number;
+  arousal: number;
 }
 
 export function AIAssistant() {
@@ -29,6 +38,9 @@ export function AIAssistant() {
   ]);
   const [isLoading, setIsLoading] = useState(false);
   const [hasNewMessage, setHasNewMessage] = useState(true);
+  const [lastMoodData, setLastMoodData] = useState<MoodData | null>(null);
+  const [isRiskyMood, setIsRiskyMood] = useState(false);
+  const [isPulsing, setIsPulsing] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   // Scroll to bottom of messages when new messages are added
@@ -40,8 +52,162 @@ export function AIAssistant() {
   useEffect(() => {
     if (isOpen) {
       setHasNewMessage(false);
+      setIsPulsing(false);
     }
   }, [isOpen]);
+
+  // Listen for mood logged events
+  useEffect(() => {
+    const unsubscribeMoodLogged = listenEvent(
+      "moodLogged",
+      (moodData: MoodData) => {
+        setLastMoodData(moodData);
+
+        // Analyze if this mood is a risky one for spending
+        const isRisky = analyzeRiskyMood(moodData);
+        setIsRiskyMood(isRisky);
+
+        // If risky, set hasNewMessage to true to show notification
+        if (isRisky) {
+          setHasNewMessage(true);
+        }
+      }
+    );
+
+    const unsubscribeOpenAssistant = listenEvent(
+      "openAIAssistant",
+      (moodData: MoodData) => {
+        // Always open the assistant when this event is triggered
+        setIsOpen(true);
+
+        // Always provide mood advice, whether risky or not
+        provideMoodAdvice(moodData);
+
+        // Start pulsing animation to draw attention
+        setIsPulsing(true);
+      }
+    );
+
+    return () => {
+      unsubscribeMoodLogged();
+      unsubscribeOpenAssistant();
+    };
+  }, []);
+
+  // Analyze if a mood is risky for impulsive spending
+  const analyzeRiskyMood = (moodData: MoodData): boolean => {
+    // High arousal + negative valence (angry, stressed) or high arousal + positive valence (excited, elated)
+    // are often associated with impulsive spending
+
+    // Red quadrant (high arousal, negative valence) - angry, stressed
+    if (moodData.quadrant === "red") {
+      return true;
+    }
+
+    // Yellow quadrant (high arousal, positive valence) - excited, elated
+    if (moodData.quadrant === "yellow") {
+      return true;
+    }
+
+    // Specific high-risk feelings regardless of quadrant
+    const riskyFeelings = [
+      "stressed",
+      "angry",
+      "anxious",
+      "excited",
+      "impulsive",
+      "frustrated",
+      "overwhelmed",
+      "bored",
+      "sad",
+    ];
+
+    if (
+      riskyFeelings.some((feeling) =>
+        moodData.feeling.toLowerCase().includes(feeling.toLowerCase())
+      )
+    ) {
+      return true;
+    }
+
+    return false;
+  };
+
+  // Provide personalized advice based on mood
+  const provideMoodAdvice = async (moodData: MoodData) => {
+    setIsLoading(true);
+
+    // Add a temporary loading message
+    setMessages((prev) => [
+      ...prev,
+      {
+        role: "assistant",
+        content: "...",
+      },
+    ]);
+
+    try {
+      // Call your backend API with the mood data
+      const response = await fetch(
+        `/api/financial-assistant?emotion=${moodData.feeling}&purchase_history=recent purchases include $50 at restaurant, $120 on clothing`,
+        {
+          method: "POST",
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error("Failed to get response from assistant");
+      }
+
+      const data = await response.json();
+
+      // Replace the loading message with the actual response
+      setMessages((prev) => {
+        const newMessages = [...prev];
+        newMessages[newMessages.length - 1] = {
+          role: "assistant",
+          content: `I noticed you're feeling **${moodData.feeling}**. ${data.financial_suggestion}`,
+        };
+        return newMessages;
+      });
+    } catch (error) {
+      console.error("Error getting AI response:", error);
+      // Replace the loading message with a fallback message based on the mood
+      setMessages((prev) => {
+        const newMessages = [...prev];
+        newMessages[newMessages.length - 1] = {
+          role: "assistant",
+          content: generateFallbackAdvice(moodData),
+        };
+        return newMessages;
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Generate fallback advice if the API call fails
+  const generateFallbackAdvice = (moodData: MoodData): string => {
+    const { quadrant, feeling } = moodData;
+
+    if (quadrant === "red") {
+      return `I noticed you're feeling **${feeling}**. When we're experiencing high-energy negative emotions, we sometimes make impulsive purchases to feel better. Consider waiting 24 hours before making any non-essential purchases. Would you like to talk about what's causing these feelings?`;
+    }
+
+    if (quadrant === "yellow") {
+      return `I noticed you're feeling **${feeling}**. When we're excited or energized, we can sometimes make impulsive purchases. Try making a list of what you want to buy and revisit it in 24 hours to see if you still want these items. How can I help you channel this energy positively?`;
+    }
+
+    if (quadrant === "blue") {
+      return `I noticed you're feeling **${feeling}**. When we're feeling down, retail therapy can seem appealing. Consider free activities that might boost your mood instead, like going for a walk or calling a friend. Is there something specific that's making you feel this way?`;
+    }
+
+    if (quadrant === "green") {
+      return `I noticed you're feeling **${feeling}**. This is a good emotional state for making thoughtful financial decisions. If you're considering any purchases, now might be a good time to evaluate them calmly. Would you like me to help you review your budget or savings goals?`;
+    }
+
+    return `I noticed you're feeling **${feeling}**. Being aware of our emotions when making financial decisions can help us make choices we won't regret later. How can I help you with your financial goals today?`;
+  };
 
   // Format message content to improve readability
   const formatMessageContent = (content: string): string => {
@@ -149,11 +315,21 @@ export function AIAssistant() {
       <Sheet open={isOpen} onOpenChange={setIsOpen}>
         <SheetTrigger asChild>
           <Button
-            className="h-14 w-14 rounded-full bg-pink-500 hover:bg-pink-600 shadow-lg flex items-center justify-center relative"
+            className={`h-14 w-14 rounded-full ${
+              isRiskyMood
+                ? "bg-amber-500 hover:bg-amber-600"
+                : "bg-pink-500 hover:bg-pink-600"
+            } shadow-lg flex items-center justify-center relative ${
+              isPulsing ? "animate-bounce" : ""
+            }`}
             onClick={() => setIsOpen(true)}
           >
             <div className="relative">
-              <Sparkles className="h-6 w-6 text-white" />
+              {isRiskyMood ? (
+                <AlertTriangle className="h-6 w-6 text-white" />
+              ) : (
+                <Sparkles className="h-6 w-6 text-white" />
+              )}
               <span className="absolute -top-1 -right-1 h-2 w-2 bg-white rounded-full" />
             </div>
             {hasNewMessage && (
@@ -168,17 +344,32 @@ export function AIAssistant() {
           side="right"
           className="w-[350px] sm:w-[400px] p-0 flex flex-col"
         >
-          <SheetHeader className="p-4 border-b bg-pink-500">
+          <SheetHeader
+            className={`p-4 border-b ${
+              isRiskyMood ? "bg-amber-500" : "bg-pink-500"
+            }`}
+          >
             <div className="flex justify-between items-center">
               <SheetTitle className="flex items-center gap-2 text-white">
-                <Sparkles className="h-5 w-5" />
+                {isRiskyMood ? (
+                  <AlertTriangle className="h-5 w-5" />
+                ) : (
+                  <Sparkles className="h-5 w-5" />
+                )}
                 Penny
+                {lastMoodData && isRiskyMood && (
+                  <span className="text-xs bg-white text-amber-600 px-2 py-0.5 rounded-full font-medium">
+                    Spending Alert
+                  </span>
+                )}
               </SheetTitle>
               <Button
                 variant="ghost"
                 size="icon"
                 onClick={() => setIsOpen(false)}
-                className="h-8 w-8 text-white hover:bg-pink-600"
+                className={`h-8 w-8 text-white ${
+                  isRiskyMood ? "hover:bg-amber-600" : "hover:bg-pink-600"
+                }`}
               >
                 <X className="h-4 w-4" />
                 <span className="sr-only">Close</span>
@@ -197,7 +388,9 @@ export function AIAssistant() {
                 <div
                   className={`max-w-[80%] rounded-lg p-3 ${
                     message.role === "user"
-                      ? "bg-pink-500 text-white"
+                      ? `${
+                          isRiskyMood ? "bg-amber-500" : "bg-pink-500"
+                        } text-white`
                       : "bg-gray-800 text-gray-100"
                   }`}
                 >
@@ -229,7 +422,9 @@ export function AIAssistant() {
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 placeholder="Type your message..."
-                className="min-h-[60px] resize-none bg-gray-800 border-gray-700 focus-visible:ring-pink-400"
+                className={`min-h-[60px] resize-none bg-gray-800 border-gray-700 focus-visible:ring-${
+                  isRiskyMood ? "amber" : "pink"
+                }-400`}
                 disabled={isLoading}
                 onKeyDown={(e) => {
                   if (e.key === "Enter" && !e.shiftKey) {
@@ -242,7 +437,11 @@ export function AIAssistant() {
                 type="submit"
                 size="icon"
                 disabled={isLoading || !input.trim()}
-                className="h-[60px] w-[60px] flex-shrink-0 bg-pink-500 hover:bg-pink-600"
+                className={`h-[60px] w-[60px] flex-shrink-0 ${
+                  isRiskyMood
+                    ? "bg-amber-500 hover:bg-amber-600"
+                    : "bg-pink-500 hover:bg-pink-600"
+                }`}
               >
                 {isLoading ? (
                   <Loader2 className="h-5 w-5 animate-spin" />

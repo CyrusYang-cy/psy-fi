@@ -17,6 +17,8 @@ import {
 } from "chart.js";
 import { Scatter } from "react-chartjs-2";
 import { Chart } from "chart.js";
+import { useRouter } from "next/navigation";
+import { createEvent } from "@/lib/eventEmitter";
 
 // Register required Chart.js components
 ChartJS.register(LinearScale, PointElement, Tooltip, Legend, ...registerables);
@@ -100,6 +102,9 @@ const MoodMeter = ({ user }: MoodMeterProps) => {
   const [isZoomed, setIsZoomed] = useState(false);
 
   const allFeelings = useMemo(() => getAllFeelings(), []);
+
+  // Add router for potential navigation
+  const router = useRouter();
 
   const handleQuadrantSelect = (quadrant: QuadrantType) => {
     setSelectedQuadrant(quadrant);
@@ -720,6 +725,54 @@ const MoodMeter = ({ user }: MoodMeterProps) => {
       setSuccess(true);
       setIsPopupOpen(false);
 
+      // Show success message
+      const successMessage = document.createElement("div");
+      successMessage.className =
+        "fixed bottom-20 right-4 bg-gray-900 text-white p-4 rounded-lg shadow-lg z-50 max-w-xs animate-fade-in";
+      successMessage.innerHTML = `
+        <div class="flex items-center gap-3">
+          <div class="flex-shrink-0 bg-green-500 rounded-full p-2">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-white" viewBox="0 0 20 20" fill="currentColor">
+              <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" />
+            </svg>
+          </div>
+          <div>
+            <p class="font-medium">Mood logged successfully!</p>
+            <p class="text-sm text-gray-300">Penny will now provide personalized financial advice based on your mood.</p>
+          </div>
+        </div>
+      `;
+      document.body.appendChild(successMessage);
+
+      // Remove the success message after a few seconds
+      setTimeout(() => {
+        if (successMessage.parentNode) {
+          successMessage.classList.add("animate-fade-out");
+          setTimeout(() => {
+            if (successMessage.parentNode) {
+              document.body.removeChild(successMessage);
+            }
+          }, 500);
+        }
+      }, 3000);
+
+      // Trigger AI assistant with the mood data
+      const moodData = {
+        quadrant: selectedQuadrant,
+        feeling: selectedFeeling,
+        note: note,
+        valence: selectedFeelingData?.valence || 0,
+        arousal: selectedFeelingData?.arousal || 0,
+      };
+
+      // Emit an event that the AI assistant can listen to
+      createEvent("moodLogged", moodData);
+
+      // Open the AI assistant after a short delay
+      setTimeout(() => {
+        createEvent("openAIAssistant", moodData);
+      }, 1500);
+
       setTimeout(() => {
         resetSelection();
         setNote("");
@@ -817,11 +870,17 @@ const MoodMeter = ({ user }: MoodMeterProps) => {
                   </button>
                   <h3
                     className={`text-xl font-bold ${
-                      getQuadrantColors(visibleQuadrants.length === 1 ? visibleQuadrants[0] : selectedQuadrant).text
+                      getQuadrantColors(
+                        visibleQuadrants.length === 1
+                          ? visibleQuadrants[0]
+                          : selectedQuadrant
+                      ).text
                     }`}
                   >
-                    {visibleQuadrants.length === 1 
-                      ? `${MOOD_QUADRANTS[visibleQuadrants[0]].description} Feelings`
+                    {visibleQuadrants.length === 1
+                      ? `${
+                          MOOD_QUADRANTS[visibleQuadrants[0]].description
+                        } Feelings`
                       : `${MOOD_QUADRANTS[selectedQuadrant].description} Feelings`}
                   </h3>
                 </div>
@@ -833,7 +892,9 @@ const MoodMeter = ({ user }: MoodMeterProps) => {
                   {Object.entries(MOOD_QUADRANTS).map(([key, quadrant]) => {
                     const quadrantKey = key as QuadrantType;
                     const colors = getQuadrantColors(quadrantKey);
-                    const isVisible = visibleQuadrants.includes(quadrantKey) && visibleQuadrants.length === 1;
+                    const isVisible =
+                      visibleQuadrants.includes(quadrantKey) &&
+                      visibleQuadrants.length === 1;
 
                     return (
                       <button
@@ -847,7 +908,9 @@ const MoodMeter = ({ user }: MoodMeterProps) => {
                           backgroundColor: isVisible ? undefined : colors.fill,
                           borderColor: colors.fill,
                           textShadow: "0 1px 2px rgba(0,0,0,0.6)",
-                          boxShadow: isVisible ? `0 0 8px ${colors.fill}60` : 'none'
+                          boxShadow: isVisible
+                            ? `0 0 8px ${colors.fill}60`
+                            : "none",
                         }}
                         onClick={() => toggleQuadrantVisibility(quadrantKey)}
                       >
@@ -859,9 +922,11 @@ const MoodMeter = ({ user }: MoodMeterProps) => {
                     <button
                       className="px-3 py-1 rounded-full text-xs font-medium transition-colors text-white bg-gray-800 border border-gray-400 hover:bg-gray-700 shadow-sm"
                       style={{
-                        textShadow: "0 1px 2px rgba(0,0,0,0.6)"
+                        textShadow: "0 1px 2px rgba(0,0,0,0.6)",
                       }}
-                      onClick={() => setVisibleQuadrants(["red", "blue", "green", "yellow"])}
+                      onClick={() =>
+                        setVisibleQuadrants(["red", "blue", "green", "yellow"])
+                      }
                     >
                       Show All
                     </button>
@@ -910,9 +975,12 @@ const MoodMeter = ({ user }: MoodMeterProps) => {
                     const colors = getQuadrantColors(feeling.quadrant!);
                     const isSelected = selectedFeeling === feeling.name;
                     const isHovered = hoveredFeeling?.name === feeling.name;
-                    
+
                     const baseSize = 100;
-                    const textLengthFactor = Math.min(feeling.name.length * 5, 60);
+                    const textLengthFactor = Math.min(
+                      feeling.name.length * 5,
+                      60
+                    );
                     const size = baseSize + textLengthFactor;
 
                     return (
@@ -925,7 +993,7 @@ const MoodMeter = ({ user }: MoodMeterProps) => {
                         onHoverEnd={() => handleFeelingHover(null)}
                         layout
                         transition={{
-                          layout: { duration: 0.3, type: "spring" }
+                          layout: { duration: 0.3, type: "spring" },
                         }}
                       >
                         <AnimatePresence>
@@ -939,13 +1007,23 @@ const MoodMeter = ({ user }: MoodMeterProps) => {
                                 boxShadow: `0 0 15px ${colors.fill}60`,
                                 borderColor: colors.fill,
                                 borderWidth: "1px",
-                                maxWidth: "200px"
+                                maxWidth: "200px",
                               }}
                             >
-                              <div className="font-bold mb-1 text-white" style={{ textShadow: "0 1px 2px rgba(0,0,0,0.8)" }}>
+                              <div
+                                className="font-bold mb-1 text-white"
+                                style={{
+                                  textShadow: "0 1px 2px rgba(0,0,0,0.8)",
+                                }}
+                              >
                                 {feeling.name}
                               </div>
-                              <div className="text-white" style={{ textShadow: "0 1px 1px rgba(0,0,0,0.5)" }}>
+                              <div
+                                className="text-white"
+                                style={{
+                                  textShadow: "0 1px 1px rgba(0,0,0,0.5)",
+                                }}
+                              >
                                 {feeling.definition}
                               </div>
                             </motion.div>
@@ -954,23 +1032,35 @@ const MoodMeter = ({ user }: MoodMeterProps) => {
 
                         <motion.div
                           className="shape-blob cursor-pointer flex flex-col items-center justify-center"
-                          style={{
-                            "--blob-color-1": colors.fill,
-                            "--blob-color-2": colors.fill,
-                            "--blob-color-3": `${colors.fill}99`,
-                            width: `${size}px`,
-                            height: `${size}px`,
-                            filter: (isSelected || isHovered) ? `drop-shadow(0 0 10px ${colors.fill})` : "none",
-                          } as React.CSSProperties}
+                          style={
+                            {
+                              "--blob-color-1": colors.fill,
+                              "--blob-color-2": colors.fill,
+                              "--blob-color-3": `${colors.fill}99`,
+                              width: `${size}px`,
+                              height: `${size}px`,
+                              filter:
+                                isSelected || isHovered
+                                  ? `drop-shadow(0 0 10px ${colors.fill})`
+                                  : "none",
+                            } as React.CSSProperties
+                          }
                           variants={bubbleVariants}
                           initial="initial"
                           whileHover="hover"
                           whileTap="tap"
-                          animate={isSelected || isHovered ? "hover" : "initial"}
+                          animate={
+                            isSelected || isHovered ? "hover" : "initial"
+                          }
                           layout
                         >
                           <div className="absolute inset-0 flex items-center justify-center z-10">
-                            <span className="text-white font-extrabold text-center text-shadow-md" style={{ textShadow: `0 1px 3px rgba(0,0,0,0.8), 0 0 8px ${colors.fill}` }}>
+                            <span
+                              className="text-white font-extrabold text-center text-shadow-md"
+                              style={{
+                                textShadow: `0 1px 3px rgba(0,0,0,0.8), 0 0 8px ${colors.fill}`,
+                              }}
+                            >
                               {feeling.name}
                             </span>
                           </div>
@@ -993,13 +1083,18 @@ const MoodMeter = ({ user }: MoodMeterProps) => {
                   >
                     <h3
                       className="text-xl font-extrabold text-white mb-2"
-                      style={{ 
-                        textShadow: `0 1px 3px rgba(0,0,0,0.8), 0 0 5px ${getQuadrantColors(selectedFeelingData.quadrant!).fill}` 
+                      style={{
+                        textShadow: `0 1px 3px rgba(0,0,0,0.8), 0 0 5px ${
+                          getQuadrantColors(selectedFeelingData.quadrant!).fill
+                        }`,
                       }}
                     >
                       {selectedFeelingData.name}
                     </h3>
-                    <p className="text-white font-medium mb-4" style={{ textShadow: "0 1px 1px rgba(0,0,0,0.5)" }}>
+                    <p
+                      className="text-white font-medium mb-4"
+                      style={{ textShadow: "0 1px 1px rgba(0,0,0,0.5)" }}
+                    >
                       {selectedFeelingData.definition}
                     </p>
                     <div className="flex gap-4 text-sm">
@@ -1022,8 +1117,8 @@ const MoodMeter = ({ user }: MoodMeterProps) => {
                 <AnimatePresence>
                   {isPopupOpen && selectedFeelingData && (
                     <div className="fixed inset-0 flex items-center justify-center z-50">
-                      <div 
-                        className="absolute inset-0 bg-black/40 backdrop-blur-sm" 
+                      <div
+                        className="absolute inset-0 bg-black/40 backdrop-blur-sm"
                         onClick={closePopup}
                       ></div>
                       <motion.div
@@ -1032,16 +1127,26 @@ const MoodMeter = ({ user }: MoodMeterProps) => {
                         exit={{ opacity: 0, scale: 0.9 }}
                         className="relative bg-gray-900/65 backdrop-blur-md rounded-xl p-6 max-w-md w-full mx-4 shadow-2xl"
                         style={{
-                          borderColor: getQuadrantColors(selectedFeelingData.quadrant || "red").fill,
+                          borderColor: getQuadrantColors(
+                            selectedFeelingData.quadrant || "red"
+                          ).fill,
                           borderWidth: "2px",
-                          boxShadow: `0 0 20px 2px ${getQuadrantColors(selectedFeelingData.quadrant || "red").fill}60`
+                          boxShadow: `0 0 20px 2px ${
+                            getQuadrantColors(
+                              selectedFeelingData.quadrant || "red"
+                            ).fill
+                          }60`,
                         }}
                       >
                         <div className="flex justify-between items-center mb-4">
                           <h3
                             className="text-xl font-extrabold text-white"
-                            style={{ 
-                              textShadow: `0 1px 3px rgba(0,0,0,0.8), 0 0 5px ${getQuadrantColors(selectedFeelingData.quadrant || "red").fill}` 
+                            style={{
+                              textShadow: `0 1px 3px rgba(0,0,0,0.8), 0 0 5px ${
+                                getQuadrantColors(
+                                  selectedFeelingData.quadrant || "red"
+                                ).fill
+                              }`,
                             }}
                           >
                             Log &ldquo;{selectedFeelingData.name}&rdquo;
@@ -1066,11 +1171,14 @@ const MoodMeter = ({ user }: MoodMeterProps) => {
                             </svg>
                           </button>
                         </div>
-                        
-                        <p className="text-white font-medium mb-4" style={{ textShadow: "0 1px 1px rgba(0,0,0,0.5)" }}>
+
+                        <p
+                          className="text-white font-medium mb-4"
+                          style={{ textShadow: "0 1px 1px rgba(0,0,0,0.5)" }}
+                        >
                           {selectedFeelingData.definition}
                         </p>
-                        
+
                         <div className="mb-4">
                           <label
                             htmlFor="popup-note"
@@ -1100,10 +1208,18 @@ const MoodMeter = ({ user }: MoodMeterProps) => {
                             onClick={handleSubmit}
                             disabled={isSubmitting}
                             className={`flex-1 py-3 rounded-lg font-medium transition-colors ${
-                              getQuadrantColors(selectedFeelingData.quadrant || "red").bg
+                              getQuadrantColors(
+                                selectedFeelingData.quadrant || "red"
+                              ).bg
                             } hover:${
-                              getQuadrantColors(selectedFeelingData.quadrant || "red").hover
-                            } ${getQuadrantColors(selectedFeelingData.quadrant || "red").text}`}
+                              getQuadrantColors(
+                                selectedFeelingData.quadrant || "red"
+                              ).hover
+                            } ${
+                              getQuadrantColors(
+                                selectedFeelingData.quadrant || "red"
+                              ).text
+                            }`}
                           >
                             {isSubmitting ? (
                               <span className="flex items-center justify-center gap-2">
@@ -1176,12 +1292,16 @@ const MoodMeter = ({ user }: MoodMeterProps) => {
 
                         <motion.div
                           className="shape-blob cursor-pointer flex flex-col items-center justify-center p-6 backdrop-blur-sm"
-                          style={{
-                            "--blob-color-1": colors.fill,
-                            "--blob-color-2": colors.fill,
-                            "--blob-color-3": `${colors.fill}99`,
-                            filter: isHovered ? `drop-shadow(0 0 10px ${colors.fill})` : "none",
-                          } as React.CSSProperties}
+                          style={
+                            {
+                              "--blob-color-1": colors.fill,
+                              "--blob-color-2": colors.fill,
+                              "--blob-color-3": `${colors.fill}99`,
+                              filter: isHovered
+                                ? `drop-shadow(0 0 10px ${colors.fill})`
+                                : "none",
+                            } as React.CSSProperties
+                          }
                           variants={bubbleVariants}
                           initial="initial"
                           whileHover="hover"
@@ -1190,11 +1310,16 @@ const MoodMeter = ({ user }: MoodMeterProps) => {
                         >
                           <h3
                             className="text-white text-xl font-extrabold z-10 text-center"
-                            style={{ textShadow: `0 1px 3px rgba(0,0,0,0.8), 0 0 5px ${colors.fill}` }}
+                            style={{
+                              textShadow: `0 1px 3px rgba(0,0,0,0.8), 0 0 5px ${colors.fill}`,
+                            }}
                           >
                             {quadrant.description}
                           </h3>
-                          <p className="text-white text-center text-sm z-10 font-medium" style={{ textShadow: "0 1px 1px rgba(0,0,0,0.5)" }}>
+                          <p
+                            className="text-white text-center text-sm z-10 font-medium"
+                            style={{ textShadow: "0 1px 1px rgba(0,0,0,0.5)" }}
+                          >
                             {/* Removed color name text */}
                           </p>
                         </motion.div>
