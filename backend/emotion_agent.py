@@ -187,58 +187,7 @@ async def fetch_transaction(request: PlaidTransactionRequest):
         # Debug logging
         print(f"DEBUG: Using start_date={start_date}, end_date={end_date}")
 
-        # Step 1: Create a public token
-        create_token_payload = {
-            "client_id": PLAID_CLIENT_ID,
-            "secret": PLAID_SECRET,
-            "institution_id": request.institution_id,
-            "initial_products": ["transactions"],
-            "options": {
-                "webhook": "https://your-webhook-url.com"  # Optional
-            }
-        }
-        print(f"DEBUG: Create token payload: {create_token_payload}")
-
-        create_token_response = requests.post(
-            f"{PLAID_BASE_URL}/sandbox/public_token/create",
-            json=create_token_payload
-        )
-
-        if not create_token_response.ok:
-            print(
-                f"DEBUG: Create token error response: {create_token_response.text}")
-            raise HTTPException(
-                status_code=create_token_response.status_code,
-                detail=f"Error creating public token: {create_token_response.text}"
-            )
-
-        create_token_data = create_token_response.json()
-        public_token = create_token_data["public_token"]
-
-        # Step 2: Exchange the public token for an access token
-        exchange_token_payload = {
-            "client_id": PLAID_CLIENT_ID,
-            "secret": PLAID_SECRET,
-            "public_token": public_token
-        }
-        print(f"DEBUG: Exchange token payload: {exchange_token_payload}")
-
-        exchange_token_response = requests.post(
-            f"{PLAID_BASE_URL}/item/public_token/exchange",
-            json=exchange_token_payload
-        )
-
-        if not exchange_token_response.ok:
-            print(
-                f"DEBUG: Exchange token error response: {exchange_token_response.text}")
-            raise HTTPException(
-                status_code=exchange_token_response.status_code,
-                detail=f"Error exchanging public token: {exchange_token_response.text}"
-            )
-
-        exchange_token_data = exchange_token_response.json()
-        access_token = exchange_token_data["access_token"]
-
+        access_token = "access-sandbox-bae775da-2bd4-437e-bf92-810073f7970d"
         # Step 3: Use the access token to fetch transaction data
         transactions_payload = {
             "client_id": PLAID_CLIENT_ID,
@@ -262,6 +211,7 @@ async def fetch_transaction(request: PlaidTransactionRequest):
             # If successful, return the data
             if transactions_response.ok:
                 transactions_data = transactions_response.json()
+                print(f"DEBUG: Transactions data: {transactions_data}")
                 return {"transactions": transactions_data.get("transactions", [])}
 
             # Check if it's a PRODUCT_NOT_READY error
@@ -287,58 +237,8 @@ async def fetch_transaction(request: PlaidTransactionRequest):
                     {
                         "transaction_id": "1",
                         "amount": 75.50,
-                        "name": "Starbucks",
+                        "name": "Error",
                         "date": "2024-05-15",
-                        "category": ["Food and Drink", "Coffee Shop"]
-                    },
-                    {
-                        "transaction_id": "2",
-                        "amount": 120.30,
-                        "name": "Amazon",
-                        "date": "2024-05-12",
-                        "category": ["Shopping", "Online"]
-                    },
-                    {
-                        "transaction_id": "3",
-                        "amount": 45.00,
-                        "name": "Uber",
-                        "date": "2024-05-10",
-                        "category": ["Transportation", "Ride Share"]
-                    },
-                    {
-                        "transaction_id": "4",
-                        "amount": 200.00,
-                        "name": "Rent Payment",
-                        "date": "2024-05-01",
-                        "category": ["Housing", "Rent"]
-                    },
-                    {
-                        "transaction_id": "5",
-                        "amount": 65.20,
-                        "name": "Grocery Store",
-                        "date": "2024-05-08",
-                        "category": ["Food and Drink", "Groceries"]
-                    },
-                    {
-                        "transaction_id": "6",
-                        "amount": 12.99,
-                        "name": "Netflix",
-                        "date": "2024-05-05",
-                        "category": ["Entertainment", "Subscription"]
-                    },
-                    {
-                        "transaction_id": "7",
-                        "amount": 89.99,
-                        "name": "Clothing Store",
-                        "date": "2024-05-18",
-                        "category": ["Shopping", "Clothing"]
-                    },
-                    {
-                        "transaction_id": "8",
-                        "amount": 35.00,
-                        "name": "Restaurant",
-                        "date": "2024-05-20",
-                        "category": ["Food and Drink", "Restaurants"]
                     }
                 ]
             }
