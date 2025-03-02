@@ -33,7 +33,7 @@ const CategoryBadge = ({ category }: CategoryBadgeProps) => {
 const TransactionsTable = ({ transactions }: TransactionTableProps) => {
   if (!transactions || transactions.length === 0) {
     return (
-      <Table className="bg-black text-white">
+      <Table className="border-gray-800">
         <TableHeader className="bg-gray-900">
           <TableRow>
             <TableHead className="px-2 text-gray-300">Transaction</TableHead>
@@ -62,7 +62,7 @@ const TransactionsTable = ({ transactions }: TransactionTableProps) => {
   }
 
   return (
-    <Table className="bg-black text-white border-gray-800">
+    <Table className="border-gray-800">
       <TableHeader className="bg-gray-900">
         <TableRow>
           <TableHead className="px-2 text-gray-300">Transaction</TableHead>

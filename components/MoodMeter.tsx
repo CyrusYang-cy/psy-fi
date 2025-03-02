@@ -107,13 +107,13 @@ const MoodMeter = ({ user }: MoodMeterProps) => {
   const allFeelings = useMemo(() => getAllFeelings(), []);
 
   // Change blob shape every 3 seconds
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setBlobIndex((prevIndex) => (prevIndex + 1) % blobPaths.length);
-    }, 3000);
+  // useEffect(() => {
+  //   const interval = setInterval(() => {
+  //     setBlobIndex((prevIndex) => (prevIndex + 1) % blobPaths.length);
+  //   }, 3000);
 
-    return () => clearInterval(interval);
-  }, []);
+  //   return () => clearInterval(interval);
+  // }, []);
 
   const handleQuadrantSelect = (quadrant: QuadrantType) => {
     setSelectedQuadrant(quadrant);
@@ -922,36 +922,19 @@ const MoodMeter = ({ user }: MoodMeterProps) => {
                         />
 
                         <motion.div
-                          className="relative cursor-pointer w-48 h-48 flex flex-col items-center justify-center p-6 backdrop-blur-sm"
+                          className="shape-blob cursor-pointer flex flex-col items-center justify-center p-6 backdrop-blur-sm"
+                          style={{
+                            '--blob-color-1': colors.fill,
+                            '--blob-color-2': colors.fill,
+                            '--blob-color-3': `${colors.fill}99`,
+                            filter: isHovered ? `drop-shadow(0 0 10px ${colors.fill})` : 'none',
+                          } as React.CSSProperties}
                           variants={bubbleVariants}
                           initial="initial"
                           whileHover="hover"
                           whileTap="tap"
                           animate={isHovered ? "hover" : "initial"}
                         >
-                          <svg
-                            width="100%"
-                            height="100%"
-                            viewBox="0 0 200 200"
-                            className="absolute inset-0"
-                            style={{
-                              filter: isHovered
-                                ? `drop-shadow(0 0 10px ${colors.fill})`
-                                : "none",
-                            }}
-                          >
-                            <motion.path
-                              d={path}
-                              fill={colors.fill}
-                              initial={{ opacity: 0.7 }}
-                              animate={{
-                                opacity: isHovered ? 0.9 : 0.7,
-                                scale: isHovered ? 1.05 : 1,
-                              }}
-                              transition={{ duration: 0.3 }}
-                            />
-                          </svg>
-
                           <h3
                             className={`${colors.text} text-xl font-bold mb-2 z-10`}
                           >

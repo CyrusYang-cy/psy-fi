@@ -54,7 +54,7 @@ const TransactionHistory = async ({
   const showReconnectionSuccess = reconnected === "true";
 
   return (
-    <div className="transactions bg-black text-white min-h-screen p-6">
+    <div className="transactions min-h-screen p-6 bg-gray-900">
       <div className="transactions-header">
         <HeaderBox
           title="Transaction History"
@@ -70,7 +70,7 @@ const TransactionHistory = async ({
       </div>
 
       <div className="space-y-6">
-        <div className="transactions-account bg-gray-900 p-6 rounded-lg">
+        <div className="transactions-account">
           <div className="flex flex-col gap-2">
             <h2 className="text-18 font-bold text-white">
               {account?.data?.name || "Account"}
@@ -83,7 +83,7 @@ const TransactionHistory = async ({
             </p>
           </div>
 
-          <div className="transactions-account-balance bg-gray-800 p-4 rounded-lg">
+          <div className="transactions-account-balance">
             <p className="text-14 text-gray-300">Current balance</p>
             <p className="text-24 text-center font-bold text-white">
               {formatAmount(account?.data?.currentBalance || 0)}

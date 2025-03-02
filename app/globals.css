@@ -10,8 +10,43 @@
 }
 
 @layer base {
+  :root {
+    --background: 222.2 84% 4.9%;
+    --foreground: 210 40% 98%;
+    
+    --card: 222.2 84% 4.9%;
+    --card-foreground: 210 40% 98%;
+    
+    --popover: 222.2 84% 4.9%;
+    --popover-foreground: 210 40% 98%;
+    
+    --primary: 217.2 91.2% 59.8%;
+    --primary-foreground: 222.2 47.4% 11.2%;
+    
+    --secondary: 217.2 32.6% 17.5%;
+    --secondary-foreground: 210 40% 98%;
+    
+    --muted: 217.2 32.6% 17.5%;
+    --muted-foreground: 215 20.2% 65.1%;
+    
+    --accent: 217.2 32.6% 17.5%;
+    --accent-foreground: 210 40% 98%;
+    
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 210 40% 98%;
+    
+    --border: 217.2 32.6% 17.5%;
+    --input: 217.2 32.6% 17.5%;
+    --ring: 212.7 26.8% 83.9%;
+  }
+
   body {
-    @apply bg-gray-900;
+    @apply bg-gray-900 text-white;
+  }
+
+  /* Apply dark background to all main containers */
+  main, section, div, header, footer, aside {
+    @apply bg-opacity-100;
   }
 }
 
@@ -52,7 +87,7 @@
 
 @layer utilities {
   .input-class {
-    @apply text-16 placeholder:text-16 rounded-lg border border-gray-300 text-gray-900 placeholder:text-gray-500;
+    @apply text-16 placeholder:text-16 rounded-lg border border-gray-700 bg-gray-800 text-white placeholder:text-gray-400;
   }
 
   .sheet-content button {
@@ -195,12 +230,12 @@
 
   /* My Banks */
   .my-banks {
-    @apply flex h-screen max-h-screen w-full flex-col gap-8 bg-gray-25 p-8 xl:py-12;
+    @apply flex h-screen max-h-screen w-full flex-col gap-8 bg-gray-900 text-white p-8 xl:py-12;
   }
 
-  /* My Banks */
+  /* Transactions */
   .transactions {
-    @apply flex max-h-screen w-full flex-col gap-8 overflow-y-scroll bg-gray-25 p-8 xl:py-12;
+    @apply flex max-h-screen w-full flex-col gap-8 overflow-y-scroll bg-gray-900 text-white p-8 xl:py-12;
   }
 
   .transactions-header {
@@ -208,11 +243,11 @@
   }
 
   .transactions-account {
-    @apply flex flex-col justify-between gap-4 rounded-lg border-y bg-blue-600 px-4 py-5 md:flex-row;
+    @apply flex flex-col justify-between gap-4 rounded-lg border-y border-gray-700 bg-gray-800 px-4 py-5 md:flex-row;
   }
 
   .transactions-account-balance {
-    @apply flex-center flex-col  gap-2 rounded-md bg-blue-25/20 px-4 py-2 text-white;
+    @apply flex-center flex-col gap-2 rounded-md bg-gray-700 px-4 py-2 text-white;
   }
 
   .header-box {
@@ -220,20 +255,20 @@
   }
 
   .header-box-title {
-    @apply text-24 lg:text-30 font-semibold text-gray-900;
+    @apply text-24 lg:text-30 font-semibold text-white;
   }
 
   .header-box-subtext {
-    @apply text-14 lg:text-16 font-normal text-gray-600;
+    @apply text-14 lg:text-16 font-normal text-gray-300;
   }
 
   /* Bank Card */
   .bank-card {
-    @apply relative flex h-[190px] w-full max-w-[320px] justify-between rounded-[20px] border border-white bg-bank-gradient shadow-creditCard backdrop-blur-[6px];
+    @apply relative flex h-[190px] w-full max-w-[320px] justify-between rounded-[20px] border border-gray-700 bg-bank-gradient shadow-creditCard backdrop-blur-[6px];
   }
 
   .bank-card_content {
-    @apply relative z-10 flex size-full max-w-[228px] flex-col justify-between rounded-l-[20px] bg-gray-700 bg-bank-gradient px-5 pb-4 pt-5;
+    @apply relative z-10 flex size-full max-w-[228px] flex-col justify-between rounded-l-[20px] bg-gray-800 bg-bank-gradient px-5 pb-4 pt-5;
   }
 
   .bank-card_icon {
@@ -242,7 +277,7 @@
 
   /* Bank Info */
   .bank-info {
-    @apply gap-[18px] flex p-4 transition-all border bg-blue-25 border-transparent;
+    @apply gap-[18px] flex p-4 transition-all border border-gray-700 bg-gray-800 rounded-lg;
   }
 
   /* Category Badge */
@@ -269,7 +304,7 @@
   }
 
   .plaidlink-ghost {
-    @apply flex cursor-pointer items-center justify-center gap-3 rounded-lg px-3 py-7 hover:bg-white lg:justify-start;
+    @apply flex cursor-pointer items-center justify-center gap-3 rounded-lg px-3 py-7 hover:bg-gray-800 lg:justify-start;
   }
 
   .plaidlink-default {
@@ -278,7 +313,7 @@
 
   /* Auth */
   .auth-asset {
-    @apply flex h-screen w-full sticky top-0 items-center justify-end bg-sky-1 max-lg:hidden;
+    @apply flex h-screen w-full sticky top-0 items-center justify-end bg-gray-900 max-lg:hidden;
   }
 
   /* Auth Form */
@@ -291,7 +326,7 @@
   }
 
   .form-label {
-    @apply text-14 w-full max-w-[280px] font-medium text-gray-700;
+    @apply text-14 w-full max-w-[280px] font-medium text-gray-300;
   }
 
   .form-message {
@@ -308,7 +343,7 @@
 
   /* Payment Transfer */
   .payment-transfer {
-    @apply no-scrollbar flex flex-col overflow-y-scroll bg-gray-25 p-8 md:max-h-screen xl:py-12;
+    @apply no-scrollbar flex flex-col overflow-y-scroll bg-gray-900 text-white p-8 md:max-h-screen xl:py-12;
   }
 
   .payment-transfer_form-item {
@@ -320,11 +355,11 @@
   }
 
   .payment-transfer_form-details {
-    @apply flex flex-col gap-1 border-t border-gray-200 pb-5 pt-6;
+    @apply flex flex-col gap-1 border-t border-gray-700 pb-5 pt-6;
   }
 
   .payment-transfer_btn-box {
-    @apply mt-5 flex w-full max-w-[850px] gap-3 border-gray-200 py-5;
+    @apply mt-5 flex w-full max-w-[850px] gap-3 border-gray-700 py-5;
   }
 
   .payment-transfer_btn {
@@ -381,5 +416,32 @@
 
   .sidebar-label {
     @apply text-16 font-medium text-white max-xl:hidden;
+  }
+
+  /* Animated blob styles */
+  .shape-blob {
+    width: 200px;
+    height: 200px;
+    background: linear-gradient(64deg, var(--blob-color-1) 23%, var(--blob-color-2) 23%, var(--blob-color-3) 80%);
+    animation: blob 8s ease-in-out infinite;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+  }
+
+  @keyframes blob {
+    0%, 100% {
+      border-radius: 24% 76% 35% 65% / 27% 36% 64% 73%;
+    }
+    25% {
+      border-radius: 76% 24% 33% 67% / 68% 55% 45% 32%;
+    }
+    50% {
+      border-radius: 32% 68% 69% 31% / 56% 72% 28% 44%;
+    }
+    75% {
+      border-radius: 55% 45% 37% 63% / 38% 30% 70% 62%;
+    }
   }
 }
