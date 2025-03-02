@@ -539,25 +539,25 @@ const MoodMeter = ({ user }: MoodMeterProps) => {
   const quadrantLabels = useMemo(
     () => [
       {
-        text: "RED: High Arousal, Negative Valence",
+        text: "High Arousal, Negative Valence",
         x: -0.5,
         y: 0.9,
         color: "rgba(239, 68, 68, 0.9)",
       },
       {
-        text: "YELLOW: High Arousal, Positive Valence",
+        text: "High Arousal, Positive Valence",
         x: 0.5,
         y: 0.9,
         color: "rgba(234, 179, 8, 0.9)",
       },
       {
-        text: "BLUE: Low Arousal, Negative Valence",
+        text: "Low Arousal, Negative Valence",
         x: -0.5,
         y: -0.9,
         color: "rgba(59, 130, 246, 0.9)",
       },
       {
-        text: "GREEN: Low Arousal, Positive Valence",
+        text: "Low Arousal, Positive Valence",
         x: 0.5,
         y: -0.9,
         color: "rgba(34, 197, 94, 0.9)",
@@ -817,10 +817,12 @@ const MoodMeter = ({ user }: MoodMeterProps) => {
                   </button>
                   <h3
                     className={`text-xl font-bold ${
-                      getQuadrantColors(selectedQuadrant).text
+                      getQuadrantColors(visibleQuadrants.length === 1 ? visibleQuadrants[0] : selectedQuadrant).text
                     }`}
                   >
-                    {MOOD_QUADRANTS[selectedQuadrant].name} Feelings
+                    {visibleQuadrants.length === 1 
+                      ? `${MOOD_QUADRANTS[visibleQuadrants[0]].description} Feelings`
+                      : `${MOOD_QUADRANTS[selectedQuadrant].description} Feelings`}
                   </h3>
                 </div>
 
@@ -836,11 +838,17 @@ const MoodMeter = ({ user }: MoodMeterProps) => {
                     return (
                       <button
                         key={`filter-${key}`}
-                        className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${
+                        className={`px-3 py-1 rounded-full text-xs font-medium transition-colors text-white ${
                           isVisible
-                            ? `${colors.bg} ${colors.border}`
-                            : "bg-gray-800 border border-gray-700"
+                            ? `${colors.bg} ${colors.border} shadow-md`
+                            : "bg-opacity-20 border hover:bg-opacity-40"
                         }`}
+                        style={{
+                          backgroundColor: isVisible ? undefined : colors.fill,
+                          borderColor: colors.fill,
+                          textShadow: "0 1px 2px rgba(0,0,0,0.6)",
+                          boxShadow: isVisible ? `0 0 8px ${colors.fill}60` : 'none'
+                        }}
                         onClick={() => toggleQuadrantVisibility(quadrantKey)}
                       >
                         {quadrant.name}
@@ -849,7 +857,10 @@ const MoodMeter = ({ user }: MoodMeterProps) => {
                   })}
                   {visibleQuadrants.length === 1 && (
                     <button
-                      className="px-3 py-1 rounded-full text-xs font-medium transition-colors bg-gray-800 border border-gray-700 hover:bg-gray-700"
+                      className="px-3 py-1 rounded-full text-xs font-medium transition-colors text-white bg-gray-800 border border-gray-400 hover:bg-gray-700 shadow-sm"
+                      style={{
+                        textShadow: "0 1px 2px rgba(0,0,0,0.6)"
+                      }}
                       onClick={() => setVisibleQuadrants(["red", "blue", "green", "yellow"])}
                     >
                       Show All
@@ -1181,10 +1192,10 @@ const MoodMeter = ({ user }: MoodMeterProps) => {
                             className="text-white text-xl font-extrabold z-10 text-center"
                             style={{ textShadow: `0 1px 3px rgba(0,0,0,0.8), 0 0 5px ${colors.fill}` }}
                           >
-                            {quadrant.name}
+                            {quadrant.description}
                           </h3>
                           <p className="text-white text-center text-sm z-10 font-medium" style={{ textShadow: "0 1px 1px rgba(0,0,0,0.5)" }}>
-                            {quadrant.description}
+                            {/* Removed color name text */}
                           </p>
                         </motion.div>
                       </motion.div>
