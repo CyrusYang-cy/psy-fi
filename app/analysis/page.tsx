@@ -19,7 +19,9 @@ export default async function AnalysisPage() {
   }
 
   // Get user's mood entries
-  const moodEntries = await getMoodEntries({ userId: user.$id });
+  const moodEntries = await getMoodEntries({
+    userId: user.$id,
+  });
 
   return (
     <main className="flex-center flex-col paddings">

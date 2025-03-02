@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef } from "react";
-import { format } from "date-fns";
+import { format, differenceInDays, addDays } from "date-fns";
 import Link from "next/link";
 import {
   subDays,
@@ -32,7 +32,7 @@ const SIGNIFICANT_EVENTS = [
 ];
 
 // Time scale options
-type TimeScale = "1D" | "1W" | "1M";
+type TimeScale = "1D" | "1W" | "1M" | "All";
 
 const SidebarMoodGraph = ({ entries }: SidebarMoodGraphProps) => {
   const [hoveredEntry, setHoveredEntry] = useState<any | null>(null);
@@ -66,18 +66,26 @@ const SidebarMoodGraph = ({ entries }: SidebarMoodGraphProps) => {
         endDate = endOfDay(now);
         break;
       case "1M":
-        // For 1M, show the current month
-        startDate = startOfMonth(now);
-        endDate = endOfMonth(now);
+        // Show a full month (not just current month)
+        startDate = startOfDay(subDays(now, 30));
+        endDate = endOfDay(now);
         break;
+      case "All":
+        // Return all entries
+        return sortedEntries;
       default:
         startDate = startOfDay(subWeeks(now, 1));
         endDate = endOfDay(now);
     }
 
+    // Convert timestamps to ISO strings for consistent comparison
+    const startTimestamp = startDate.toISOString();
+    const endTimestamp = endDate.toISOString();
+
     return sortedEntries.filter((entry) => {
-      const entryDate = new Date(entry.timestamp);
-      return entryDate >= startDate && entryDate <= endDate;
+      // Ensure consistent date format comparison
+      const entryTimestamp = new Date(entry.timestamp).toISOString();
+      return entryTimestamp >= startTimestamp && entryTimestamp <= endTimestamp;
     });
   };
 
@@ -94,7 +102,7 @@ const SidebarMoodGraph = ({ entries }: SidebarMoodGraphProps) => {
       return filteredEntries;
     }
 
-    // For 1W and 1M, aggregate data by day
+    // For 1W, 1M, and All, aggregate data by day
     const entriesByDay: Record<string, any[]> = {};
     const now = new Date();
     let dateRange: Date[] = [];
@@ -110,6 +118,33 @@ const SidebarMoodGraph = ({ entries }: SidebarMoodGraphProps) => {
         start: startOfMonth(now),
         end: endOfMonth(now),
       });
+    } else if (timeScale === "All" && filteredEntries.length > 0) {
+      // For "All", create a date range from the first to the last entry
+      const firstEntryDate = new Date(filteredEntries[0].timestamp);
+      const lastEntryDate = new Date(
+        filteredEntries[filteredEntries.length - 1].timestamp
+      );
+
+      // Create array of all days between first and last entry
+      const dayDiff = differenceInDays(lastEntryDate, firstEntryDate);
+
+      // If there are too many days, just use the days with entries
+      if (dayDiff > 60) {
+        // Just use the days that have entries
+        const uniqueDays = new Set<string>();
+        filteredEntries.forEach((entry) => {
+          const day = format(new Date(entry.timestamp), "yyyy-MM-dd");
+          uniqueDays.add(day);
+        });
+
+        // Convert unique day strings back to Date objects
+        dateRange = Array.from(uniqueDays).map((day) => new Date(day));
+      } else {
+        // Create a continuous range of days
+        for (let i = 0; i <= dayDiff; i++) {
+          dateRange.push(addDays(firstEntryDate, i));
+        }
+      }
     }
 
     // Initialize empty arrays for each day
@@ -121,9 +156,11 @@ const SidebarMoodGraph = ({ entries }: SidebarMoodGraphProps) => {
     // Group entries by day
     filteredEntries.forEach((entry) => {
       const day = format(new Date(entry.timestamp), "yyyy-MM-dd");
-      if (entriesByDay[day] !== undefined) {
-        entriesByDay[day].push(entry);
+      if (!entriesByDay[day]) {
+        // For "All" view, we might encounter days not in our initial range
+        entriesByDay[day] = [];
       }
+      entriesByDay[day].push(entry);
     });
 
     // Calculate average values for each day
@@ -227,6 +264,19 @@ const SidebarMoodGraph = ({ entries }: SidebarMoodGraphProps) => {
       if (entryMinutes > totalMinutes) return 100;
 
       return (entryMinutes / totalMinutes) * 100;
+    } else if (timeScale === "All" && entries.length > 1) {
+      // For "All", position based on date relative to first and last entry
+      const firstEntryDate = new Date(entries[0].timestamp).getTime();
+      const lastEntryDate = new Date(
+        entries[entries.length - 1].timestamp
+      ).getTime();
+      const entryDate = new Date(entry.timestamp).getTime();
+
+      // Calculate position as percentage of total time range
+      const totalTimeRange = lastEntryDate - firstEntryDate;
+      const entryTimePosition = entryDate - firstEntryDate;
+
+      return (entryTimePosition / totalTimeRange) * 100;
     } else {
       // For 1W and 1M, evenly space entries
       return (index / (entries.length - 1 || 1)) * 100;
@@ -284,7 +334,7 @@ const SidebarMoodGraph = ({ entries }: SidebarMoodGraphProps) => {
       <div className="flex justify-between items-center mb-2">
         <h3 className="text-sm font-semibold text-white">Recent Moods</h3>
         <div className="flex">
-          {(["1D", "1W", "1M"] as TimeScale[]).map((scale) => (
+          {(["1D", "1W", "1M", "All"] as TimeScale[]).map((scale) => (
             <button
               key={scale}
               className={`px-1.5 py-0.5 text-[10px] rounded ${

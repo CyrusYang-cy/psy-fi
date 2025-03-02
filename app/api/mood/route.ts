@@ -10,7 +10,10 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: "User ID is required" }, { status: 400 });
     }
 
-    const moodEntries = await getMoodEntries({ userId });
+    const moodEntries = await getMoodEntries({ 
+      userId,
+      // No limit parameter needed as we've modified the function to fetch all entries
+    });
     return NextResponse.json(moodEntries);
   } catch (error) {
     console.error("Error fetching mood entries:", error);

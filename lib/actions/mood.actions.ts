@@ -58,7 +58,7 @@ export async function logMood({
 
 export async function getMoodEntries({ 
   userId, 
-  limit = 50 
+  limit = 500 
 }: { 
   userId: string; 
   limit?: number; 
@@ -71,15 +71,20 @@ export async function getMoodEntries({
       throw new Error("Mood collection ID is not set in environment variables");
     }
     
+    // Simple query to get all entries for the user, ordered by timestamp
+    const queries = [
+      Query.equal('userId', [userId]),
+      Query.orderAsc('timestamp'), // Keep ascending order to get oldest first
+      Query.limit(5000) // Set a very high limit to ensure we get everything
+    ];
+    
     const moods = await database.listDocuments(
       DATABASE_ID!,
       MOOD_COLLECTION_ID,
-      [
-        Query.equal('userId', [userId]),
-        Query.orderDesc('timestamp'),
-        Query.limit(limit)
-      ]
+      queries
     );
+    
+    console.log(`Fetched ${moods.documents.length} mood entries for user ${userId}`);
     
     return parseStringify(moods.documents);
   } catch (error) {

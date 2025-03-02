@@ -40,7 +40,7 @@ const SIGNIFICANT_EVENTS = [
 ];
 
 // Time scale options
-type TimeScale = "1D" | "1W" | "1M";
+type TimeScale = "1D" | "1W" | "1M" | "All";
 
 const MoodGraph = ({ entries }: MoodGraphProps) => {
   const [hoveredEntry, setHoveredEntry] = useState<any | null>(null);
@@ -76,6 +76,51 @@ const MoodGraph = ({ entries }: MoodGraphProps) => {
     (a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
   );
 
+  // Log the date range of available entries with more details
+  useEffect(() => {
+    if (sortedEntries.length > 0) {
+      const firstEntry = sortedEntries[0];
+      const lastEntry = sortedEntries[sortedEntries.length - 1];
+
+      // Log the first 5 entries to check their format
+      const firstFiveEntries = sortedEntries.slice(0, 5).map((entry) => ({
+        id: entry.$id,
+        timestamp: entry.timestamp,
+        date: new Date(entry.timestamp).toISOString(),
+        quadrant: entry.quadrant,
+        feeling: entry.feeling,
+      }));
+
+      console.log("Available entries date range:", {
+        first: new Date(firstEntry.timestamp).toISOString(),
+        firstRaw: firstEntry.timestamp,
+        last: new Date(lastEntry.timestamp).toISOString(),
+        totalEntries: sortedEntries.length,
+        firstFiveEntries,
+      });
+
+      // Check if there are any entries before Feb 13
+      const feb13 = new Date("2024-02-13T00:00:00.000Z");
+      const entriesBeforeFeb13 = sortedEntries.filter(
+        (entry) => new Date(entry.timestamp) < feb13
+      );
+
+      console.log(`Found ${entriesBeforeFeb13.length} entries before Feb 13`);
+      if (entriesBeforeFeb13.length > 0) {
+        console.log(
+          "Sample entries before Feb 13:",
+          entriesBeforeFeb13.slice(0, 3).map((entry) => ({
+            id: entry.$id,
+            timestamp: entry.timestamp,
+            date: new Date(entry.timestamp).toISOString(),
+            quadrant: entry.quadrant,
+            feeling: entry.feeling,
+          }))
+        );
+      }
+    }
+  }, [sortedEntries]);
+
   // Filter entries based on selected time scale and date
   const getFilteredEntries = () => {
     let startDate: Date;
@@ -93,11 +138,20 @@ const MoodGraph = ({ entries }: MoodGraphProps) => {
           // If today is selected, show last 7 days
           startDate = startOfDay(subDays(selectedDate, 6));
         } else {
-          // Otherwise, center the week on the selected date (3 days before, 3 days after)
-          startDate = startOfWeek(selectedDate);
-          endDate = endOfWeek(selectedDate);
-          // If the selected date is part of the week but not centered,
-          // we'll leave it as is to show the entire week
+          // Use the selected date as the center of a week window (±3 days)
+          startDate = startOfDay(subDays(selectedDate, 3));
+          endDate = endOfDay(addDays(selectedDate, 3));
+
+          // Log the date range for debugging
+          console.log("1W date range:", {
+            start: startDate.toISOString(),
+            end: endDate.toISOString(),
+          });
+
+          return sortedEntries.filter((entry) => {
+            const entryDate = new Date(entry.timestamp);
+            return entryDate >= startDate && entryDate <= endDate;
+          });
         }
         endDate = endOfDay(selectedDate);
         break;
@@ -106,15 +160,37 @@ const MoodGraph = ({ entries }: MoodGraphProps) => {
         startDate = startOfDay(subDays(selectedDate, 29));
         endDate = endOfDay(selectedDate);
         break;
+      case "All":
+        // Return all entries when "All" is selected
+        console.log(
+          "All time selected, returning all entries:",
+          sortedEntries.length
+        );
+        return sortedEntries;
       default:
         startDate = startOfDay(subDays(selectedDate, 6));
         endDate = endOfDay(selectedDate);
     }
 
-    return sortedEntries.filter((entry) => {
-      const entryDate = new Date(entry.timestamp);
-      return entryDate >= startDate && entryDate <= endDate;
+    // Convert timestamps to ISO strings for consistent comparison
+    const startTimestamp = startDate.toISOString();
+    const endTimestamp = endDate.toISOString();
+
+    // Log the date range for debugging
+    console.log(`${timeScale} date range:`, {
+      start: startTimestamp,
+      end: endTimestamp,
     });
+
+    const filtered = sortedEntries.filter((entry) => {
+      // Ensure consistent date format comparison
+      const entryTimestamp = new Date(entry.timestamp).toISOString();
+      return entryTimestamp >= startTimestamp && entryTimestamp <= endTimestamp;
+    });
+
+    console.log(`Filtered entries for ${timeScale}:`, filtered.length);
+
+    return filtered;
   };
 
   // Aggregate data for time scales
@@ -125,12 +201,23 @@ const MoodGraph = ({ entries }: MoodGraphProps) => {
       return [];
     }
 
+    // Log the date range of filtered entries
+    if (filteredEntries.length > 0) {
+      const firstFiltered = filteredEntries[0];
+      const lastFiltered = filteredEntries[filteredEntries.length - 1];
+      console.log(`Filtered entries for ${timeScale}:`, {
+        count: filteredEntries.length,
+        firstDate: new Date(firstFiltered.timestamp).toISOString(),
+        lastDate: new Date(lastFiltered.timestamp).toISOString(),
+      });
+    }
+
     // For 1D, organize entries by hour
     if (timeScale === "1D") {
       return filteredEntries;
     }
 
-    // For 1W and 1M, aggregate data by day
+    // For 1W, 1M, and All, aggregate data by day
     const entriesByDay: Record<string, any[]> = {};
     let dateRange: Date[] = [];
 
@@ -144,6 +231,37 @@ const MoodGraph = ({ entries }: MoodGraphProps) => {
       for (let i = 29; i >= 0; i--) {
         dateRange.push(subDays(selectedDate, i));
       }
+    } else if (timeScale === "All" && filteredEntries.length > 0) {
+      // For "All", create a date range from the first to the last entry
+      const firstEntryDate = new Date(filteredEntries[0].timestamp);
+      const lastEntryDate = new Date(
+        filteredEntries[filteredEntries.length - 1].timestamp
+      );
+
+      // Create array of all days between first and last entry
+      const dayDiff = differenceInDays(lastEntryDate, firstEntryDate);
+
+      // If there are too many days, just use the days with entries
+      if (dayDiff > 60) {
+        // Just use the days that have entries
+        const uniqueDays = new Set<string>();
+        filteredEntries.forEach((entry) => {
+          const day = format(new Date(entry.timestamp), "yyyy-MM-dd");
+          uniqueDays.add(day);
+        });
+
+        // Convert unique day strings back to Date objects
+        dateRange = Array.from(uniqueDays).map((day) => new Date(day));
+
+        console.log(
+          `Using ${dateRange.length} unique days instead of ${dayDiff} continuous days`
+        );
+      } else {
+        // Create a continuous range of days
+        for (let i = 0; i <= dayDiff; i++) {
+          dateRange.push(addDays(firstEntryDate, i));
+        }
+      }
     }
 
     // Initialize empty arrays for each day
@@ -155,9 +273,11 @@ const MoodGraph = ({ entries }: MoodGraphProps) => {
     // Group entries by day
     filteredEntries.forEach((entry) => {
       const day = format(new Date(entry.timestamp), "yyyy-MM-dd");
-      if (entriesByDay[day] !== undefined) {
-        entriesByDay[day].push(entry);
+      if (!entriesByDay[day]) {
+        // For "All" view, we might encounter days not in our initial range
+        entriesByDay[day] = [];
       }
+      entriesByDay[day].push(entry);
     });
 
     // Calculate average values for each day
@@ -179,17 +299,35 @@ const MoodGraph = ({ entries }: MoodGraphProps) => {
 
       // Calculate average valence and arousal
       const totalValence = dayEntries.reduce((sum, entry) => {
-        const feeling = MOOD_QUADRANTS[
-          entry.quadrant as keyof typeof MOOD_QUADRANTS
-        ]?.feelings.find((f) => f.name === entry.feeling);
-        return sum + (feeling?.valence || 0);
+        const quadrant =
+          MOOD_QUADRANTS[entry.quadrant as keyof typeof MOOD_QUADRANTS];
+        if (!quadrant) {
+          console.warn(
+            `Invalid quadrant for entry: ${entry.$id}, quadrant: ${entry.quadrant}`
+          );
+          return sum;
+        }
+
+        const feeling = quadrant.feelings.find((f) => f.name === entry.feeling);
+        if (!feeling) {
+          console.warn(
+            `Invalid feeling for entry: ${entry.$id}, quadrant: ${entry.quadrant}, feeling: ${entry.feeling}`
+          );
+          return sum;
+        }
+
+        return sum + (feeling.valence || 0);
       }, 0);
 
       const totalArousal = dayEntries.reduce((sum, entry) => {
-        const feeling = MOOD_QUADRANTS[
-          entry.quadrant as keyof typeof MOOD_QUADRANTS
-        ]?.feelings.find((f) => f.name === entry.feeling);
-        return sum + (feeling?.arousal || 0);
+        const quadrant =
+          MOOD_QUADRANTS[entry.quadrant as keyof typeof MOOD_QUADRANTS];
+        if (!quadrant) return sum;
+
+        const feeling = quadrant.feelings.find((f) => f.name === entry.feeling);
+        if (!feeling) return sum;
+
+        return sum + (feeling.arousal || 0);
       }, 0);
 
       // Use the first entry of the day as a template and update with averages
@@ -205,13 +343,54 @@ const MoodGraph = ({ entries }: MoodGraphProps) => {
       aggregatedData.push(aggregatedEntry);
     });
 
-    return aggregatedData.sort(
+    const result = aggregatedData.sort(
       (a, b) =>
         new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
     );
+
+    // Log the final aggregated data
+    console.log(`Final aggregated data for ${timeScale}:`, {
+      count: result.length,
+      firstDate:
+        result.length > 0
+          ? new Date(result[0].timestamp).toISOString()
+          : "none",
+      lastDate:
+        result.length > 0
+          ? new Date(result[result.length - 1].timestamp).toISOString()
+          : "none",
+    });
+
+    return result;
   };
 
   const displayedEntries = getAggregatedData();
+
+  // Debug displayed entries
+  useEffect(() => {
+    if (displayedEntries.length > 0) {
+      console.log("Displayed entries:", {
+        count: displayedEntries.length,
+        firstDate: new Date(displayedEntries[0].timestamp).toISOString(),
+        lastDate: new Date(
+          displayedEntries[displayedEntries.length - 1].timestamp
+        ).toISOString(),
+        timeScale,
+      });
+
+      // Check if there are any entries before Feb 13
+      const feb13 = new Date("2024-02-13T00:00:00.000Z");
+      const entriesBeforeFeb13 = displayedEntries.filter(
+        (entry) => !entry.isPlaceholder && new Date(entry.timestamp) < feb13
+      );
+
+      console.log(
+        `Found ${entriesBeforeFeb13.length} displayed entries before Feb 13`
+      );
+    } else {
+      console.log("No entries to display for timeScale:", timeScale);
+    }
+  }, [displayedEntries, timeScale]);
 
   // Get feeling information for a specific entry
   const getFeelingInfo = (entry: any) => {
@@ -263,6 +442,20 @@ const MoodGraph = ({ entries }: MoodGraphProps) => {
       if (entryMinutes > totalMinutes) return 95;
 
       return paddedPosition;
+    } else if (timeScale === "All" && entries.length > 1) {
+      // For "All", position based on date relative to first and last entry
+      const firstEntryDate = new Date(entries[0].timestamp).getTime();
+      const lastEntryDate = new Date(
+        entries[entries.length - 1].timestamp
+      ).getTime();
+      const entryDate = new Date(entry.timestamp).getTime();
+
+      // Calculate position as percentage of total time range
+      const totalTimeRange = lastEntryDate - firstEntryDate;
+      const entryTimePosition = entryDate - firstEntryDate;
+
+      // Add padding to left and right (5% on each side)
+      return 5 + (entryTimePosition / totalTimeRange) * 90;
     } else {
       // For 1W and 1M, evenly space entries with padding
       if (entries.length <= 1) return 50; // Center if only one entry
@@ -327,6 +520,22 @@ const MoodGraph = ({ entries }: MoodGraphProps) => {
         format(setHours(today, 21), "h a"), // 9 PM
         format(setHours(addDays(today, 1), 0), "h a"), // 12 AM
       ];
+    } else if (timeScale === "All" && displayedEntries.length > 0) {
+      // For All, show more distributed dates
+      const firstDate = new Date(displayedEntries[0].timestamp);
+      const lastDate = new Date(
+        displayedEntries[displayedEntries.length - 1].timestamp
+      );
+      const totalDays = differenceInDays(lastDate, firstDate);
+
+      // Create 5 evenly spaced labels
+      const labels = [];
+      for (let i = 0; i < 5; i++) {
+        const daysToAdd = Math.floor((totalDays * i) / 4);
+        const date = addDays(firstDate, daysToAdd);
+        labels.push(format(date, "MMM d"));
+      }
+      return labels;
     } else {
       // For 1W and 1M, show first and last date
       return [
@@ -349,7 +558,14 @@ const MoodGraph = ({ entries }: MoodGraphProps) => {
 
   // Get date range display for the header
   const getDateRangeDisplay = () => {
-    if (timeScale === "1D") {
+    if (timeScale === "All" && sortedEntries.length > 0) {
+      const firstEntry = sortedEntries[0];
+      const lastEntry = sortedEntries[sortedEntries.length - 1];
+      return `${format(
+        new Date(firstEntry.timestamp),
+        "MMM d, yyyy"
+      )} - ${format(new Date(lastEntry.timestamp), "MMM d, yyyy")}`;
+    } else if (timeScale === "1D") {
       return format(selectedDate, "MMMM d, yyyy");
     } else if (timeScale === "1W") {
       const startDate = subDays(selectedDate, 6);
@@ -392,7 +608,7 @@ const MoodGraph = ({ entries }: MoodGraphProps) => {
         {/* Time scale and calendar selector */}
         <div className="flex items-center space-x-2">
           <div className="flex bg-gray-700 rounded-lg p-0.5">
-            {(["1D", "1W", "1M"] as TimeScale[]).map((scale) => (
+            {(["1D", "1W", "1M", "All"] as TimeScale[]).map((scale) => (
               <button
                 key={scale}
                 className={`px-3 py-1 text-xs rounded-md transition ${
@@ -773,6 +989,13 @@ const MoodGraph = ({ entries }: MoodGraphProps) => {
       <div className="flex justify-between mt-1 text-xs text-gray-400 ml-8">
         {timeScale === "1D" ? (
           // For 1D, show hour markers
+          <div className="w-full flex justify-between">
+            {formatXAxisLabels().map((label, index) => (
+              <span key={`x-label-${index}`}>{label}</span>
+            ))}
+          </div>
+        ) : timeScale === "All" && displayedEntries.length > 0 ? (
+          // For All, show distributed date markers
           <div className="w-full flex justify-between">
             {formatXAxisLabels().map((label, index) => (
               <span key={`x-label-${index}`}>{label}</span>
