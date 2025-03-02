@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { deleteMoodEntry } from "@/lib/actions/mood.actions";
 import { MOOD_QUADRANTS } from "@/lib/constants/mood";
-import { formatDistanceToNow } from "date-fns";
+import { formatDistanceToNow, format } from "date-fns";
 
 type MoodHistoryProps = {
   entries: any[];
@@ -58,13 +58,13 @@ const MoodHistory = ({ entries }: MoodHistoryProps) => {
     const grouped: Record<string, any[]> = {};
 
     entries.forEach((entry) => {
-      const date = new Date(entry.timestamp).toLocaleDateString();
+      const formattedDate = format(new Date(entry.timestamp), "MM/dd/yyyy");
 
-      if (!grouped[date]) {
-        grouped[date] = [];
+      if (!grouped[formattedDate]) {
+        grouped[formattedDate] = [];
       }
 
-      grouped[date].push(entry);
+      grouped[formattedDate].push(entry);
     });
 
     return grouped;
