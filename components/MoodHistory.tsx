@@ -58,7 +58,11 @@ const MoodHistory = ({ entries }: MoodHistoryProps) => {
     const grouped: Record<string, any[]> = {};
 
     entries.forEach((entry) => {
-      const formattedDate = format(new Date(entry.timestamp), "MM/dd/yyyy");
+      const date = new Date(entry.timestamp);
+      const month = date.getMonth() + 1;
+      const day = date.getDate();
+      const year = date.getFullYear();
+      const formattedDate = month + "/" + day + "/" + year;
 
       if (!grouped[formattedDate]) {
         grouped[formattedDate] = [];
