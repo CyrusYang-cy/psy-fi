@@ -821,8 +821,9 @@ const MoodMeter = ({ user }: MoodMeterProps) => {
   const bubbleVariants = {
     initial: { scale: 0.8, opacity: 0.7 },
     hover: {
-      scale: 1.05,
+      scale: 1.15,
       opacity: 1,
+      zIndex: 10,
       transition: {
         type: "spring",
         stiffness: 300,
@@ -843,7 +844,7 @@ const MoodMeter = ({ user }: MoodMeterProps) => {
 
   // Animation for the floating effect
   const floatingAnimation = {
-    y: [0, -10, 0],
+    y: [0, -5, 0],
     transition: {
       duration: 3,
       repeat: Infinity,
@@ -979,11 +980,16 @@ const MoodMeter = ({ user }: MoodMeterProps) => {
                 </div>
 
                 {/* Replace Chart with Emotion Blobs */}
-                <div className="w-full flex flex-wrap justify-center gap-6 mb-8">
+                <div className="w-full grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2 mb-8 relative">
                   {filteredFeelings.map((feeling) => {
                     const colors = getQuadrantColors(feeling.quadrant!);
                     const isSelected = selectedFeeling === feeling.name;
                     const isHovered = hoveredFeeling?.name === feeling.name;
+                    
+                    // Calculate size based on text length (between 100px and 160px)
+                    const baseSize = 100;
+                    const textLengthFactor = Math.min(feeling.name.length * 5, 60);
+                    const size = baseSize + textLengthFactor;
 
                     return (
                       <motion.div
@@ -993,15 +999,36 @@ const MoodMeter = ({ user }: MoodMeterProps) => {
                         onClick={() => handleFeelingSelect(feeling)}
                         onHoverStart={() => handleFeelingHover(feeling)}
                         onHoverEnd={() => handleFeelingHover(null)}
+                        layout
+                        transition={{
+                          layout: { duration: 0.3, type: "spring" }
+                        }}
                       >
+                        {/* Description tooltip that appears on hover */}
+                        <AnimatePresence>
+                          {isHovered && (
+                            <motion.div
+                              initial={{ opacity: 0, y: -10 }}
+                              animate={{ opacity: 1, y: -20 }}
+                              exit={{ opacity: 0, y: -10 }}
+                              className={`absolute bottom-full mb-2 p-3 rounded-lg ${colors.bg} border ${colors.border} text-white text-sm max-w-[200px] z-20 text-center`}
+                              style={{
+                                boxShadow: `0 0 10px ${colors.fill}80`,
+                              }}
+                            >
+                              {feeling.definition}
+                            </motion.div>
+                          )}
+                        </AnimatePresence>
+
                         <motion.div
-                          className="shape-blob cursor-pointer flex flex-col items-center justify-center p-6"
+                          className="shape-blob cursor-pointer flex flex-col items-center justify-center"
                           style={{
                             "--blob-color-1": colors.fill,
                             "--blob-color-2": colors.fill,
                             "--blob-color-3": `${colors.fill}99`,
-                            width: "150px",
-                            height: "150px",
+                            width: `${size}px`,
+                            height: `${size}px`,
                             filter: (isSelected || isHovered) ? `drop-shadow(0 0 10px ${colors.fill})` : "none",
                           } as React.CSSProperties}
                           variants={bubbleVariants}
@@ -1009,8 +1036,9 @@ const MoodMeter = ({ user }: MoodMeterProps) => {
                           whileHover="hover"
                           whileTap="tap"
                           animate={isSelected || isHovered ? "hover" : "initial"}
+                          layout
                         >
-                          <h3 className={`${colors.text} text-lg font-bold mb-1 z-10 text-center`}>
+                          <h3 className={`${colors.text} text-base font-bold z-10 text-center px-2`}>
                             {feeling.name}
                           </h3>
                         </motion.div>
@@ -1019,39 +1047,39 @@ const MoodMeter = ({ user }: MoodMeterProps) => {
                   })}
                 </div>
 
-                {/* Feeling Information Display */}
-                {displayFeeling && (
+                {/* Feeling Information Display - Only show when selected, not on hover */}
+                {selectedFeelingData && (
                   <motion.div
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ duration: 0.3 }}
                     className={`w-full max-w-md mx-auto p-6 rounded-xl ${
-                      getQuadrantColors(displayFeeling.quadrant!).bg
+                      getQuadrantColors(selectedFeelingData.quadrant!).bg
                     } border ${
-                      getQuadrantColors(displayFeeling.quadrant!).border
+                      getQuadrantColors(selectedFeelingData.quadrant!).border
                     } mb-6`}
                   >
                     <h3
                       className={`text-xl font-bold mb-2 ${
-                        getQuadrantColors(displayFeeling.quadrant!).text
+                        getQuadrantColors(selectedFeelingData.quadrant!).text
                       }`}
                     >
-                      {displayFeeling.name}
+                      {selectedFeelingData.name}
                     </h3>
                     <p className="text-white mb-4">
-                      {displayFeeling.definition}
+                      {selectedFeelingData.definition}
                     </p>
                     <div className="flex gap-4 text-sm">
                       <div>
                         <span className="text-gray-400">Valence:</span>{" "}
                         <span className="text-blue-400">
-                          {displayFeeling.valence.toFixed(2)}
+                          {selectedFeelingData.valence.toFixed(2)}
                         </span>
                       </div>
                       <div>
                         <span className="text-gray-400">Arousal:</span>{" "}
                         <span className="text-red-400">
-                          {displayFeeling.arousal.toFixed(2)}
+                          {selectedFeelingData.arousal.toFixed(2)}
                         </span>
                       </div>
                     </div>
