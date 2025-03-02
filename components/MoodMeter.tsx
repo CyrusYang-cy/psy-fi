@@ -886,7 +886,246 @@ const MoodMeter = ({ user }: MoodMeterProps) => {
             <h2 className="text-2xl font-bold mb-4 text-center bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-purple-500">
               How are you feeling right now?
             </h2>
-            {!selectedQuadrant ? (
+            {selectedQuadrant ? (
+              <>
+                <div className="w-full mb-4 flex justify-between items-center">
+                  <button
+                    onClick={resetSelection}
+                    className="text-gray-400 hover:text-white flex items-center gap-2 transition-colors"
+                  >
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      className="h-5 w-5"
+                      viewBox="0 0 20 20"
+                      fill="currentColor"
+                    >
+                      <path
+                        fillRule="evenodd"
+                        d="M9.707 14.707a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 1.414L7.414 9H15a1 1 0 110 2H7.414l2.293 2.293a1 1 0 010 1.414z"
+                        clipRule="evenodd"
+                      />
+                    </svg>
+                    Back to all quadrants
+                  </button>
+                  <h3
+                    className={`text-xl font-bold ${
+                      getQuadrantColors(selectedQuadrant).text
+                    }`}
+                  >
+                    {MOOD_QUADRANTS[selectedQuadrant].name} Feelings
+                  </h3>
+                </div>
+
+                {/* Quadrant Visibility Controls */}
+                <div className="w-full mb-4 flex flex-wrap gap-3 items-center justify-center">
+                  <div className="text-sm text-gray-400 mr-2">
+                    Filter feelings:
+                  </div>
+                  {Object.entries(MOOD_QUADRANTS).map(([key, quadrant]) => {
+                    const quadrantKey = key as QuadrantType;
+                    const colors = getQuadrantColors(quadrantKey);
+                    const isVisible = visibleQuadrants.includes(quadrantKey);
+
+                    return (
+                      <button
+                        key={`filter-${key}`}
+                        className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${
+                          isVisible
+                            ? `${colors.bg} ${colors.border}`
+                            : "bg-gray-800 border border-gray-700"
+                        }`}
+                        onClick={() => toggleQuadrantVisibility(quadrantKey)}
+                      >
+                        {quadrant.name}
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {/* Search Bar */}
+                <div className="relative w-full max-w-md mx-auto mb-6">
+                  <input
+                    type="text"
+                    placeholder="Search for a feeling..."
+                    value={searchTerm}
+                    onChange={handleSearchChange}
+                    onFocus={handleSearchFocus}
+                    onBlur={handleSearchBlur}
+                    className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                  {isSearchFocused && filteredFeelings.length > 0 && (
+                    <div className="absolute z-50 mt-1 w-full bg-gray-800 border border-gray-700 rounded-lg shadow-lg max-h-60 overflow-y-auto">
+                      {filteredFeelings.map((feeling) => (
+                        <div
+                          key={`search-${feeling.name}`}
+                          className="px-4 py-2 hover:bg-gray-700 cursor-pointer flex items-center gap-2"
+                          onClick={() => handleSearchSelect(feeling)}
+                        >
+                          <div
+                            className={`w-3 h-3 rounded-full ${
+                              getQuadrantColors(feeling.quadrant!).bg
+                            }`}
+                          ></div>
+                          <span>{feeling.name}</span>
+                          <span className="text-xs text-gray-500 ml-auto">
+                            {
+                              MOOD_QUADRANTS[
+                                feeling.quadrant as keyof typeof MOOD_QUADRANTS
+                              ]?.name
+                            }
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* Replace Chart with Emotion Blobs */}
+                <div className="w-full flex flex-wrap justify-center gap-6 mb-8">
+                  {filteredFeelings.map((feeling) => {
+                    const colors = getQuadrantColors(feeling.quadrant!);
+                    const isSelected = selectedFeeling === feeling.name;
+                    const isHovered = hoveredFeeling?.name === feeling.name;
+
+                    return (
+                      <motion.div
+                        key={`feeling-${feeling.name}`}
+                        className="relative flex items-center justify-center"
+                        animate={floatingAnimation}
+                        onClick={() => handleFeelingSelect(feeling)}
+                        onHoverStart={() => handleFeelingHover(feeling)}
+                        onHoverEnd={() => handleFeelingHover(null)}
+                      >
+                        <motion.div
+                          className="shape-blob cursor-pointer flex flex-col items-center justify-center p-6"
+                          style={{
+                            "--blob-color-1": colors.fill,
+                            "--blob-color-2": colors.fill,
+                            "--blob-color-3": `${colors.fill}99`,
+                            width: "150px",
+                            height: "150px",
+                            filter: (isSelected || isHovered) ? `drop-shadow(0 0 10px ${colors.fill})` : "none",
+                          } as React.CSSProperties}
+                          variants={bubbleVariants}
+                          initial="initial"
+                          whileHover="hover"
+                          whileTap="tap"
+                          animate={isSelected || isHovered ? "hover" : "initial"}
+                        >
+                          <h3 className={`${colors.text} text-lg font-bold mb-1 z-10 text-center`}>
+                            {feeling.name}
+                          </h3>
+                        </motion.div>
+                      </motion.div>
+                    );
+                  })}
+                </div>
+
+                {/* Feeling Information Display */}
+                {displayFeeling && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.3 }}
+                    className={`w-full max-w-md mx-auto p-6 rounded-xl ${
+                      getQuadrantColors(displayFeeling.quadrant!).bg
+                    } border ${
+                      getQuadrantColors(displayFeeling.quadrant!).border
+                    } mb-6`}
+                  >
+                    <h3
+                      className={`text-xl font-bold mb-2 ${
+                        getQuadrantColors(displayFeeling.quadrant!).text
+                      }`}
+                    >
+                      {displayFeeling.name}
+                    </h3>
+                    <p className="text-white mb-4">
+                      {displayFeeling.definition}
+                    </p>
+                    <div className="flex gap-4 text-sm">
+                      <div>
+                        <span className="text-gray-400">Valence:</span>{" "}
+                        <span className="text-blue-400">
+                          {displayFeeling.valence.toFixed(2)}
+                        </span>
+                      </div>
+                      <div>
+                        <span className="text-gray-400">Arousal:</span>{" "}
+                        <span className="text-red-400">
+                          {displayFeeling.arousal.toFixed(2)}
+                        </span>
+                      </div>
+                    </div>
+                  </motion.div>
+                )}
+
+                {/* Note Input and Submit Button */}
+                {selectedFeeling && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.3, delay: 0.1 }}
+                    className="w-full max-w-md mx-auto"
+                  >
+                    <div className="mb-4">
+                      <label
+                        htmlFor="note"
+                        className="block text-gray-400 mb-2"
+                      >
+                        Add a note about how you're feeling (optional)
+                      </label>
+                      <textarea
+                        id="note"
+                        value={note}
+                        onChange={(e) => setNote(e.target.value)}
+                        className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        rows={3}
+                        placeholder="What's making you feel this way?"
+                      ></textarea>
+                    </div>
+
+                    <button
+                      onClick={handleSubmit}
+                      disabled={isSubmitting}
+                      className={`w-full py-3 rounded-lg font-medium transition-colors ${
+                        getQuadrantColors(selectedQuadrant).bg
+                      } hover:${
+                        getQuadrantColors(selectedQuadrant).hover
+                      } ${getQuadrantColors(selectedQuadrant).text}`}
+                    >
+                      {isSubmitting ? (
+                        <span className="flex items-center justify-center gap-2">
+                          <svg
+                            className="animate-spin h-5 w-5"
+                            xmlns="http://www.w3.org/2000/svg"
+                            fill="none"
+                            viewBox="0 0 24 24"
+                          >
+                            <circle
+                              className="opacity-25"
+                              cx="12"
+                              cy="12"
+                              r="10"
+                              stroke="currentColor"
+                              strokeWidth="4"
+                            ></circle>
+                            <path
+                              className="opacity-75"
+                              fill="currentColor"
+                              d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                            ></path>
+                          </svg>
+                          Logging...
+                        </span>
+                      ) : (
+                        "Log This Feeling"
+                      )}
+                    </button>
+                  </motion.div>
+                )}
+              </>
+            ) : (
               <>
                 <p className="text-gray-400 mb-8 text-center max-w-lg">
                   Select a quadrant to explore feelings
@@ -924,10 +1163,10 @@ const MoodMeter = ({ user }: MoodMeterProps) => {
                         <motion.div
                           className="shape-blob cursor-pointer flex flex-col items-center justify-center p-6 backdrop-blur-sm"
                           style={{
-                            '--blob-color-1': colors.fill,
-                            '--blob-color-2': colors.fill,
-                            '--blob-color-3': `${colors.fill}99`,
-                            filter: isHovered ? `drop-shadow(0 0 10px ${colors.fill})` : 'none',
+                            "--blob-color-1": colors.fill,
+                            "--blob-color-2": colors.fill,
+                            "--blob-color-3": `${colors.fill}99`,
+                            filter: isHovered ? `drop-shadow(0 0 10px ${colors.fill})` : "none",
                           } as React.CSSProperties}
                           variants={bubbleVariants}
                           initial="initial"
@@ -948,243 +1187,6 @@ const MoodMeter = ({ user }: MoodMeterProps) => {
                     );
                   })}
                 </div>
-              </>
-            ) : (
-              <>
-                <div className="w-full mb-4 flex justify-between items-center">
-                  <button
-                    onClick={resetSelection}
-                    className="text-gray-400 hover:text-white flex items-center gap-2 transition-colors"
-                  >
-                    <svg
-                      xmlns="http://www.w3.org/2000/svg"
-                      className="h-5 w-5"
-                      viewBox="0 0 20 20"
-                      fill="currentColor"
-                    >
-                      <path
-                        fillRule="evenodd"
-                        d="M9.707 14.707a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 1.414L7.414 9H15a1 1 0 110 2H7.414l2.293 2.293a1 1 0 010 1.414z"
-                        clipRule="evenodd"
-                      />
-                    </svg>
-                    Back to all quadrants
-                  </button>
-                  <h3
-                    className={`text-xl font-bold ${
-                      getQuadrantColors(selectedQuadrant).text
-                    }`}
-                  >
-                    {MOOD_QUADRANTS[selectedQuadrant].name} Feelings
-                  </h3>
-                </div>
-
-                {/* Quadrant Visibility Controls */}
-                <div className="w-full mb-4 flex flex-wrap gap-3 items-center justify-center">
-                  <div className="text-sm text-gray-400 mr-2">
-                    Show quadrants:
-                  </div>
-                  {(["red", "blue", "green", "yellow"] as QuadrantType[]).map(
-                    (quadrant) => {
-                      const colors = getQuadrantColors(quadrant);
-                      const isVisible = visibleQuadrants.includes(quadrant);
-
-                      return (
-                        <label
-                          key={quadrant}
-                          className={`flex items-center space-x-2 px-3 py-1.5 rounded-full cursor-pointer transition-colors
-                          ${isVisible ? colors.bg : "bg-gray-800/30"} 
-                          hover:bg-opacity-80`}
-                        >
-                          <input
-                            type="checkbox"
-                            checked={isVisible}
-                            onChange={() => toggleQuadrantVisibility(quadrant)}
-                            className="hidden"
-                          />
-                          <div
-                            className={`w-3 h-3 rounded-full ${
-                              isVisible ? `bg-${quadrant}-500` : "bg-gray-600"
-                            }`}
-                            style={{
-                              backgroundColor: isVisible
-                                ? colors.fill
-                                : "#4B5563",
-                            }}
-                          />
-                          <span
-                            className={`text-sm ${
-                              isVisible ? colors.text : "text-gray-500"
-                            }`}
-                          >
-                            {MOOD_QUADRANTS[quadrant].name}
-                          </span>
-                        </label>
-                      );
-                    }
-                  )}
-                </div>
-                {/* Search bar for feelings */}
-                <div className="w-full mb-6">
-                  <div className="relative">
-                    <input
-                      type="text"
-                      value={searchTerm}
-                      onChange={handleSearchChange}
-                      onFocus={handleSearchFocus}
-                      onBlur={handleSearchBlur}
-                      placeholder="Search for feelings..."
-                      className="w-full p-3 pl-10 bg-gray-800/70 border border-gray-700 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-200"
-                    />
-                    <svg
-                      xmlns="http://www.w3.org/2000/svg"
-                      className="h-5 w-5 absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"
-                      fill="none"
-                      viewBox="0 0 24 24"
-                      stroke="currentColor"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
-                      />
-                    </svg>
-
-                    {/* Search results dropdown */}
-                    {(isSearchFocused || searchTerm.trim() !== "") && (
-                      <div className="absolute z-10 w-full mt-1 bg-gray-800 border border-gray-700 rounded-lg shadow-lg max-h-60 overflow-y-auto">
-                        {filteredFeelings.length > 0 ? (
-                          filteredFeelings.map((feeling) => {
-                            const colors = getQuadrantColors(
-                              feeling.quadrant as QuadrantType
-                            );
-                            return (
-                              <div
-                                key={feeling.name}
-                                className={`p-3 cursor-pointer hover:bg-gray-700 flex items-center gap-2 border-b border-gray-700 last:border-b-0`}
-                                onClick={() => handleSearchSelect(feeling)}
-                              >
-                                <div
-                                  className="w-3 h-3 rounded-full"
-                                  style={{ backgroundColor: colors.fill }}
-                                />
-                                <span className={`${colors.text} font-medium`}>
-                                  {feeling.name}
-                                </span>
-                                <span className="text-gray-400 text-sm ml-auto">
-                                  {
-                                    MOOD_QUADRANTS[
-                                      feeling.quadrant as QuadrantType
-                                    ].name
-                                  }
-                                </span>
-                              </div>
-                            );
-                          })
-                        ) : (
-                          <div className="p-3 text-gray-400">
-                            No feelings found matching "{searchTerm}"
-                          </div>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                {/* Chart.js Feeling Plot - Only show when a quadrant is selected */}
-                <div className="w-full h-[500px] bg-gray-800/50 rounded-xl mb-8 overflow-hidden border border-gray-700 backdrop-blur-sm p-4">
-                  <Scatter
-                    id="mood-chart"
-                    ref={chartRef}
-                    data={prepareChartData}
-                    options={chartOptions}
-                  />
-                </div>
-
-                {/* Feeling information box - shown on hover or selection */}
-                {displayFeeling ? (
-                  <motion.div
-                    className="w-full mb-8"
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{
-                      duration: 0.2,
-                      type: "spring",
-                      stiffness: 500,
-                      damping: 30,
-                    }}
-                    key={displayFeeling.name} // Add key to force re-render on feeling change
-                  >
-                    <div
-                      className={`p-6 rounded-xl ${
-                        getQuadrantColors(
-                          displayFeeling.quadrant as QuadrantType
-                        ).bg
-                      } backdrop-blur-sm border border-gray-700 shadow-lg ${
-                        getQuadrantColors(
-                          displayFeeling.quadrant as QuadrantType
-                        ).shadow
-                      }`}
-                    >
-                      <h3
-                        className={`text-xl font-semibold capitalize mb-2 ${
-                          getQuadrantColors(
-                            displayFeeling.quadrant as QuadrantType
-                          ).text
-                        }`}
-                      >
-                        {displayFeeling.name}
-                      </h3>
-                      <p className="text-gray-300 mb-4">
-                        {displayFeeling.definition}
-                      </p>
-                      <div className="flex justify-between text-sm text-gray-400 mb-4">
-                        <span>
-                          Valence: {displayFeeling.valence.toFixed(2)}
-                        </span>
-                        <span>
-                          Arousal: {displayFeeling.arousal.toFixed(2)}
-                        </span>
-                      </div>
-
-                      {selectedFeeling &&
-                        selectedFeelingData &&
-                        displayFeeling === selectedFeelingData && (
-                          <>
-                            <div className="mb-4">
-                              <label
-                                htmlFor="note"
-                                className="block text-sm font-medium text-gray-300 mb-2"
-                              >
-                                Add a note (optional)
-                              </label>
-                              <textarea
-                                id="note"
-                                value={note}
-                                onChange={(e) => setNote(e.target.value)}
-                                className="w-full p-3 bg-gray-800 border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-200"
-                                rows={3}
-                                placeholder="What made you feel this way? Any additional thoughts?"
-                              />
-                            </div>
-
-                            <button
-                              onClick={handleSubmit}
-                              disabled={isSubmitting}
-                              className={`w-full bg-gradient-to-r ${
-                                getQuadrantColors(
-                                  selectedFeelingData.quadrant as QuadrantType
-                                ).gradient
-                              } text-white font-medium px-6 py-3 rounded-lg shadow-lg hover:opacity-90 transition-all duration-300`}
-                            >
-                              {isSubmitting ? "Logging..." : "Log Mood"}
-                            </button>
-                          </>
-                        )}
-                    </div>
-                  </motion.div>
-                ) : null}
               </>
             )}
           </div>
