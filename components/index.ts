@@ -23,3 +23,4 @@ export { default as HeaderBox } from './HeaderBox';
 export { default as CustomInput } from './CustomInput';
 export { default as AuthForm } from './AuthForm';
 export { default as Copy } from './Copy';
+export { AIAssistant } from './AIAssistant';
