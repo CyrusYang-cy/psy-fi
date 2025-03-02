@@ -6,9 +6,9 @@ import { getMoodEntries } from "@/lib/actions/mood.actions";
 import { redirect } from "next/navigation";
 
 export const metadata: Metadata = {
-  title: "Mood Meter | Horizon",
+  title: "Mood Meter | Psy-Fi",
   description:
-    "Track your mood fluctuations over time with Horizon's Mood Meter",
+    "Track your mood fluctuations over time with PsyFi's Mood Meter",
 };
 
 export default async function MoodMeterPage() {

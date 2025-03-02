@@ -7,6 +7,13 @@
   padding: 0;
   box-sizing: border-box;
   color: white;
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* IE and Edge */
+}
+
+/* Hide scrollbar for Chrome, Safari and Opera */
+*::-webkit-scrollbar {
+  display: none;
 }
 
 @layer base {
@@ -254,7 +261,7 @@
 
   /* Transactions */
   .transactions {
-    @apply flex max-h-screen w-full flex-col gap-8 overflow-y-scroll bg-gray-900 text-white p-8 xl:py-12;
+    @apply no-scrollbar flex max-h-screen w-full flex-col gap-8 overflow-y-scroll bg-gray-900 text-white p-8 xl:py-12;
   }
 
   .transactions-header {
@@ -310,7 +317,7 @@
 
   /* Mobile nav */
   .mobilenav-sheet {
-    @apply flex h-[calc(100vh-72px)] flex-col justify-between overflow-y-auto;
+    @apply no-scrollbar flex h-[calc(100vh-72px)] flex-col justify-between overflow-y-auto;
   }
 
   .mobilenav-sheet_close {
@@ -401,7 +408,7 @@
   }
 
   .footer_name {
-    @apply flex size-10 items-center justify-center rounded-full bg-gray-200 max-xl:hidden;
+    @apply flex size-10 items-center justify-center rounded-full bg-gray-700 max-xl:hidden;
   }
 
   .footer_email {
@@ -409,7 +416,7 @@
   }
 
   .footer_name-mobile {
-    @apply flex size-10 items-center justify-center rounded-full bg-gray-200;
+    @apply flex size-10 items-center justify-center rounded-full bg-gray-700;
   }
 
   .footer_email-mobile {

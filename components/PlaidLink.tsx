@@ -121,8 +121,9 @@ const PlaidLink = ({
             alt="connect bank"
             width={24}
             height={24}
+            className="invert"
           />
-          <p className="hiddenl text-[16px] font-semibold text-black-2 xl:block">
+          <p className="hidden text-[16px] font-semibold text-white xl:block">
             {isLoading ? "Connecting..." : buttonText}
           </p>
         </Button>
@@ -137,8 +138,9 @@ const PlaidLink = ({
             alt="connect bank"
             width={24}
             height={24}
+            className="invert"
           />
-          <p className="text-[16px] font-semibold text-black-2">
+          <p className="text-[16px] font-semibold text-white">
             {isLoading ? "Connecting..." : buttonText}
           </p>
         </Button>

@@ -14,7 +14,7 @@ export default async function AnalysisLayout({
   }
 
   return (
-    <main className="flex flex-row">
+    <main className="flex flex-row analysis-page">
       <Sidebar user={user} />
       <section className="flex-1">{children}</section>
     </main>

@@ -652,7 +652,7 @@ const SpendingMoodGraph = ({
         </div>
 
         {/* Right Y-axis for spending */}
-        <div className="absolute -right-20 -top-4 h-full flex flex-col justify-between">
+        <div className="absolute -right-0 -top-4 h-full flex flex-col justify-between">
           <div className="text-xs text-gray-400 font-semibold">Spending</div>
           <div className="text-xs text-green-400">
             {formatters.currency(maxSpending)}

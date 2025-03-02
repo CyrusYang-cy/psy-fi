@@ -100,11 +100,16 @@ const MoodMeter = ({ user }: MoodMeterProps) => {
     "yellow",
   ]);
   const [isZoomed, setIsZoomed] = useState(false);
+  const [isMounted, setIsMounted] = useState(false);
 
   const allFeelings = useMemo(() => getAllFeelings(), []);
 
   // Add router for potential navigation
   const router = useRouter();
+
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
 
   const handleQuadrantSelect = (quadrant: QuadrantType) => {
     setSelectedQuadrant(quadrant);
@@ -1266,7 +1271,6 @@ const MoodMeter = ({ user }: MoodMeterProps) => {
                     const quadrantKey = key as QuadrantType;
                     const colors = getQuadrantColors(quadrantKey);
                     const isHovered = hoveredQuadrant === quadrantKey;
-                    const path = blobPaths[blobIndex];
 
                     return (
                       <motion.div
@@ -1292,16 +1296,14 @@ const MoodMeter = ({ user }: MoodMeterProps) => {
 
                         <motion.div
                           className="shape-blob cursor-pointer flex flex-col items-center justify-center p-6 backdrop-blur-sm"
-                          style={
-                            {
-                              "--blob-color-1": colors.fill,
-                              "--blob-color-2": colors.fill,
-                              "--blob-color-3": `${colors.fill}99`,
-                              filter: isHovered
-                                ? `drop-shadow(0 0 10px ${colors.fill})`
-                                : "none",
-                            } as React.CSSProperties
-                          }
+                          style={{
+                            "--blob-color-1": colors.fill,
+                            "--blob-color-2": colors.fill,
+                            "--blob-color-3": `${colors.fill}99`,
+                            filter: isHovered
+                              ? `drop-shadow(0 0 10px ${colors.fill})`
+                              : "none",
+                          } as React.CSSProperties}
                           variants={bubbleVariants}
                           initial="initial"
                           whileHover="hover"
@@ -1316,17 +1318,24 @@ const MoodMeter = ({ user }: MoodMeterProps) => {
                           >
                             {quadrant.description}
                           </h3>
-                          <p
-                            className="text-white text-center text-sm z-10 font-medium"
-                            style={{ textShadow: "0 1px 1px rgba(0,0,0,0.5)" }}
-                          >
-                            {/* Removed color name text */}
-                          </p>
                         </motion.div>
                       </motion.div>
                     );
                   })}
                 </div>
+
+                {isMounted && (
+                  <div className="flex justify-center mb-4">
+                    <button
+                      className="px-4 py-2 bg-gradient-to-r from-pink-400 to-yellow-500 text-white rounded-lg hover:shadow-lg hover:scale-105 transition-transform duration-200"
+                      onClick={() => {
+                        router.push("/analysis");
+                      }}
+                    >
+                      Spending & Mood Insights
+                    </button>
+                  </div>
+                )}
               </>
             )}
           </div>

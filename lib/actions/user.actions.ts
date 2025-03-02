@@ -126,8 +126,11 @@ export const logoutAccount = async () => {
     cookies().delete('appwrite-session');
 
     await account.deleteSession('current');
+    
+    return true;
   } catch (error) {
-    return null;
+    console.error('Error logging out:', error);
+    return false;
   }
 }
 

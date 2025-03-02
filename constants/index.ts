@@ -2,7 +2,7 @@ export const sidebarLinks = [
   {
     imgURL: "/icons/mood.svg",
     route: "/",
-    label: "Home: Mood Meter",
+    label: "Mood Meter",
   },
   {
     imgURL: "/icons/dollar-circle.svg",
